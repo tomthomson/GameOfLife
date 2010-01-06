@@ -9,17 +9,17 @@
 #else
 #include <GL/glut.h>
 #endif
-#include <CL/cl_gl.h> // extra CL/GL include
+#include <CL/cl_gl.h> // CL/GL interoperation
 #include <cstdlib>
 #include <cstdio>
 
 /* chance, that the random starting population generator decides to create a new individual */
 #define POPULATION 0.3125
 
-/* An instance of the GameOfLife Class */
+/* create an instance of the GameOfLife Class */
 GameOfLife GameOfLife(POPULATION);
 
-/* window height, window Width and the pixels to be displayed */
+/* window height, window width and the pixels to be displayed */
 int width;
 int height;
 unsigned char* pixels;
