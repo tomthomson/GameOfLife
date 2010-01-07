@@ -7,6 +7,7 @@
 #if defined(__APPLE__) || defined(MACOSX)
 #include <GLUT/glut.h>
 #else
+#include <GL/gl.h>
 #include <GL/glut.h>
 #endif
 #include <CL/cl_gl.h> // CL/GL interoperation
