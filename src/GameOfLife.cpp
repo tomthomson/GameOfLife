@@ -31,12 +31,10 @@ int GameOfLife::setupCL(void) {
 		cl::Platform::get(&platforms);
 
 		cl::vector<cl::Platform>::iterator i;
-		if(platforms.size() > 0)
-		{
-			for(i = platforms.begin(); i != platforms.end(); ++i)
-			{
-				if(!strcmp((*i).getInfo<CL_PLATFORM_VENDOR>().c_str(), "Advanced Micro Devices, Inc."))
-				{
+		if(platforms.size() > 0) {
+			for(i = platforms.begin(); i != platforms.end(); ++i) {
+				if(!strcmp((*i).getInfo<CL_PLATFORM_VENDOR>().c_str(), "Advanced Micro Devices, Inc.")
+					|| !strcmp((*i).getInfo<CL_PLATFORM_VENDOR>().c_str(), "NVIDIA Corporation")) {
 					break;
 				}
 			}
@@ -48,7 +46,7 @@ int GameOfLife::setupCL(void) {
 		*/
 		cl_context_properties cps[3] = { CL_CONTEXT_PLATFORM, (cl_context_properties)(*i)(), 0 };
 
-		// Creating a context AMD platform
+		// Creating a context AMD/NVIDIA platform
 		context = cl::Context(CL_DEVICE_TYPE_GPU, cps, NULL, NULL, &status); assert(status == CL_SUCCESS);
 
 		// get the list of GPU devices associated with context
