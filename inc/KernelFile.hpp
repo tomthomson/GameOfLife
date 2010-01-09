@@ -24,7 +24,7 @@ public:
     bool open(const char* fileName);
 
     // Returns a pointer to the string object with the source code
-    const std::string&  source() const { return source_; }
+    const std::string& source() const { return source_; }
 
 private:
     // Disable copy constructor

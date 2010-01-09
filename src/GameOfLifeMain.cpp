@@ -2,118 +2,127 @@
 #define GL_GLEXT_PROTOTYPES
 #endif
 #include <GL/glew.h>
-#include "../inc/GameOfLifeMain.hpp"
-#include "../inc/GameOfLife.hpp"
 #if defined(__APPLE__) || defined(MACOSX)
 #include <GLUT/glut.h>
 #else
 #include <GL/gl.h>
 #include <GL/glut.h>
 #endif
-#include <CL/cl_gl.h> // CL/GL interoperation
+//#include <CL/cl_gl.h> // CL/GL interoperation
 #include <cstdlib>
 #include <cstdio>
 
-/* chance, that the random starting population generator decides to create a new individual */
-#define POPULATION 0.3125
+#include "../inc/GameOfLifeMain.hpp"
+#include "../inc/GameOfLife.hpp"
 
-/* create an instance of the GameOfLife Class */
-GameOfLife GameOfLife(POPULATION);
+/* Create an instance of the GameOfLife class */
+GameOfLife GameOfLife(POPULATION, WIDTH, HEIGHT);
 
-/* window height, window width and the pixels to be displayed */
-int width;
-int height;
-unsigned char* pixels;
+/* Free host/device memory */
+void freeMem(void) {
+	GameOfLife.freeMem();
+}
 
-/* display function */
+/* Initalise display */
+void initDisplay(int argc, char *argv[]) {
+	initGlut(argc, argv);
+	initGL();
+}
+
+/* Display function */
 void displayFunc() {
-	glClear(GL_COLOR_BUFFER_BIT);
-	glDrawPixels(width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-	glFlush();
+	glMatrixMode(GL_PROJECTION);    /* specifies the current matrix */
+	glLoadIdentity();               /* Sets the currant matrix to identity */
+	gluOrtho2D(0,WIDTH,0,HEIGHT);   /* Sets the clipping rectangle extends */
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	glEnable(GL_BLEND);             /* enable blending */
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	glColor3f(1,1,1);
+	glPointSize (1);
+
+	int state;
+	glBegin(GL_POINTS);
+	for (int x=1; x<WIDTH; x++) {
+		for (int y=1; y<HEIGHT; y++) {
+			state = GameOfLife.getState(x,y);
+			if (state>0) {
+				glColor3f((float)state/255.,1.-((float)state/255.),0);
+				glVertex3f(x,y,0);
+			}
+		}
+	}
+	glEnd();
+
 	glutSwapBuffers();
+	glutPostRedisplay();
+	glFlush();
+
+	if(GameOfLife.nextGeneration()!=0) {
+		freeMem();
+		exit(0);
+	}
 }
 
-/* idle function */
+/* Idle function */
 void idleFunc(void) {
-    glutPostRedisplay();
+	glutPostRedisplay();
 }
 
-/* keyboard function */
+/* Keyboard function */
 void keyboardFunc(unsigned char key, int mouseX, int mouseY) {
 	switch(key) {
 		/* If the user hits escape or Q, then exit */
 		case 27:
 		case 'q':
 		case 'Q':
-			cleanup();
+			freeMem();
 			exit(0);
 		default:
 			break;
 	}
 }
 
-/* initalise display */
-void initDisplay(int argc, char *argv[]) {
-	initGlut(argc, argv);
-	initGL();
-}
-
-/* initalise glut */
+/* Initialise GLUT */
 void initGlut(int argc, char *argv[]) {
-	/* initialising the window */
+	/* Initialise window */
 	glutInit(&argc, argv);
-	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
-	glutInitWindowSize(width, height);
-	glutInitWindowPosition(0,0);
+	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_ALPHA | GLUT_DEPTH);
+	glutInitWindowSize(WIDTH, HEIGHT);
+	glutInitWindowPosition(100,100);
 	glutCreateWindow("Conway's Game of Life with OpenCL");
 	glClearColor(0, 0, 0, 1.0);
 
-
-	/* the various glut callbacks */
+	/* Initialise callbacks */
 	glutDisplayFunc(displayFunc);
 	glutIdleFunc(idleFunc);
 	glutKeyboardFunc(keyboardFunc);
 }
 
-/*initalise OpenGL */
+/* Initalise OpenGL */
 void initGL(void) {
 	glewInit();
 }
 
+/* OpenGL main loop */
 void mainLoopGL(void) {
 	glutMainLoop();
 }
 
-/* free any allocated resources */
-void cleanup(void) {
-	if(pixels)
-		free(pixels);
-	GameOfLife.cleanup();
-}
-
 int main(int argc, char **argv) {
-	/* setup host/device memory and OpenCL */
+	/* Setup host/device memory and OpenCL */
 	if(GameOfLife.setup()!=0)
 		return -1;
-	/* run OpenCL GameOfLife */
-	if(GameOfLife.run()!=0)
-		return -1;
 
-	/* display GameOfLife board */
-	width = GameOfLife.getWidth();
-	height = GameOfLife.getHeight();
-	int* output = GameOfLife.getPixels();
-	pixels = (unsigned char *)malloc(height*width*4*sizeof(unsigned char));
-	for(int i=0; i< width*height; ++i) {
-		pixels[4*i]     = (unsigned char)output[i]*(i/width)/height;
-		pixels[4*i + 1] = (unsigned char)output[i]*(i%width)/width ;
-		pixels[4*i + 2] = (unsigned char)output[i]*i/(width*height);
-		pixels[4*i + 3] = 255;
-	}
-
+	/* Display GameOfLife board and calculate next generations */
 	initDisplay(argc, argv);
 	mainLoopGL();
 
-	cleanup();
+	/* Free host/device memory */
+	freeMem();
 	return EXIT_SUCCESS;
 }

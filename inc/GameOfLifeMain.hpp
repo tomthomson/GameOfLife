@@ -1,19 +1,26 @@
 #ifndef __GAMEOFLIFEMAIN_H_
 #define __GAMEOFLIFEMAIN_H_
 
-/* initialise all display related stuff */
+/* width and height of the image */
+#define WIDTH 1024
+#define HEIGHT 1024
+
+/* chance to create a new individual in the starting population */
+#define POPULATION 0.3125
+
+/* Initalise display */
 void initDisplay(int argc, char * argv[]);
 
-/* initialise GLUT */
+/* Initialise GLUT */
 void initGlut(int argc, char * argv[]);
 
-/* initalise OpenGL environment */
-void initGL (void);
+/* Initalise OpenGL */
+void initGL(void);
 
-/* program's main loop */
+/* OpenGL main loop */
 void mainLoopGL(void);
 
-/* Cleanup */
+/* Free host/device memory */
 void cleanup(void);
 
 #endif

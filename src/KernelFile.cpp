@@ -3,12 +3,12 @@
 #if defined(_WIN32) || defined(__CYGWIN__)
 #include <direct.h>
 #define GETCWD _getcwd
-#else // !_WIN32
+#else
 #include <cstring>
 #include <cstdlib>
 #include <unistd.h>
 #define GETCWD ::getcwd
-#endif // !_WIN32
+#endif
 
 std::string getCurrentDir() {
     const   size_t  pathSize = 4096;

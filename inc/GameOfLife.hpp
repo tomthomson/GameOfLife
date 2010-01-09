@@ -2,7 +2,8 @@
 #define GAMEOFLIFE_H_
 
 #include <cassert>
-#include <cstdlib>
+#include <ctime> // For time()
+#include <cstdlib> // For srand() and rand()
 #include <cstdio>
 #include <iostream>
 #include <fstream>
@@ -14,95 +15,92 @@
 
 class GameOfLife {
 private:
-	cl_float            population;       /**< starting population density */
-	cl_uint                   seed;       /**< Seed value for random number generation */
-	cl_float                 scale;       /**< paramters of mandelbrot */
-	cl_uint          maxIterations;       /**< paramters of mandelbrot */
+	float               population;       /**< starting population density */
+	int                      width;       /**< width of image */
+	int                     height;       /**< height of image */
+	size_t          imageSizeBytes;       /**< size of image in bytes */
+
 	cl::Context            context;       /**< CL context */
 	cl::vector<cl::Device> devices;       /**< CL device list */
-	cl::Buffer        outputBuffer;       /**< CL memory buffer */
+	cl::Buffer        deviceImageA;       /**< CL memory buffer for first image on the device */
+	cl::Buffer        deviceImageB;       /**< CL memory buffer for second image on the device */
 	cl::CommandQueue  commandQueue;       /**< CL command queue */
 	cl::Program            program;       /**< CL program  */
 	cl::Kernel              kernel;       /**< CL kernel */
-	cl_int                   width;       /**< width of the output image */
-	cl_int                  height;       /**< height of the output image */
-	size_t     kernelWorkGroupSize;       /**< Group Size returned by kernel */
-	int                 iterations;       /**< Number of iterations for kernel execution */
+	size_t                   sizeX;       /**< NDRange parameters */
+	size_t                   sizeY;       /**< NDRange parameters */
+	size_t             globalSizeX;       /**< NDRange parameters */
+	size_t             globalSizeY;       /**< NDRange parameters */
+	size_t     kernelWorkGroupSize;       /**< CL group Size returned by kernel */
 
 public:
-	cl_int *output;                       /**< Output array */
+	cl_int *image;                        /**< image on the host */
 
 public:
 	/** 
 	* Constructor 
 	* Initialize member variables
 	*/
-	GameOfLife(float POPULATION) : population(POPULATION) {
-		seed = 123;
-		output = NULL;
-		maxIterations = 100;
-		width = 100;
-		height = width;
-		scale = 4.0f;
-		iterations = 100;
+	GameOfLife(float p, int w, int h)
+		: population(p), width(w), height(h), image(NULL) {
+		imageSizeBytes = w*h*sizeof(int);
+		sizeX = 16;
+		sizeY = 16;
+		globalSizeX = ((width + sizeX - 1) / sizeX);
+		globalSizeY = ((height + sizeY - 1) / sizeY);
 	}
 
 	/**
-	* setup host/device memory and OpenCL
+	* Setup host/device memory and OpenCL
 	* @return 0 on success and -1 on failure
 	*/
 	int setup();
 
 	/**
-	* Allocate and initialize host memory array with random values
+	* Calculate next generation
 	* @return 0 on success and -1 on failure
 	*/
-	int setupGameOfLife();
+	int nextGeneration();
 
 	/**
-	* OpenCL related initialisations. 
+	* Get the state of a cell
+	* @return state
+	*/
+	int getState(int x, int y);
+
+	/**
+	* Set the state of a cell
+	*/
+	void setState(int x, int y, int state);
+
+	/**
+	* Free memory
+	* @return 0 on success and -1 on failure
+	*/
+	int freeMem();
+
+private:
+	/**
+	* Host initialisations.
+	* Allocate and initialize host image
+	* @return 0 on success and -1 on failure
+	*/
+	int setupHost();
+
+	/**
+	* Device initialisations.
 	* Set up Context, Device list, Command Queue, Memory buffers
+	* Allocate device images
 	* Build CL kernel program executable
 	* @return 0 on success and -1 on failure
 	*/
-	int setupCL();
+	int setupDevice();
 
 	/**
-	* run OpenCL GameOfLife
+	* Spawn initial population.
 	* @return 0 on success and -1 on failure
 	*/
-	int run();
-
-	/**
-	* Set values for kernels' arguments, enqueue calls to the kernels
-	* on to the command queue, wait till end of kernel execution.
-	* @return 0 on success and -1 on failure
-	*/
-	int runCLKernels();
-
-	/**
-	* cleanup memory allocations
-	* @return 0 on success and -1 on failure
-	*/
-	int cleanup();
-
-	/**
-	* get window width
-	* @return width
-	*/
-	cl_uint getWidth(void);
-
-	/**
-	* get window height
-	* @return height
-	*/
-	cl_uint getHeight(void);
-
-	/**
-	* get pixels to be displayed
-	* @return output
-	*/
-	cl_int* getPixels(void);
+	int spawnPopulation();
 };
 
 #endif
