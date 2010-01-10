@@ -11,6 +11,7 @@
 #define __NO_STD_VECTOR
 #define __NO_STD_STRING
 #include <CL/cl.hpp>
+//#include <CL/cl_gl.h> /* OpenCL/OpenGL interoperation */
 #include "../inc/KernelFile.hpp"
 
 class GameOfLife {
@@ -19,6 +20,8 @@ private:
 	int                      width;       /**< width of image */
 	int                     height;       /**< height of image */
 	size_t          imageSizeBytes;       /**< size of image in bytes */
+
+	bool                    paused;       /**< start/stop calculation of next generation */
 
 	cl::Context            context;       /**< CL context */
 	cl::vector<cl::Device> devices;       /**< CL device list */
@@ -34,7 +37,7 @@ private:
 	size_t     kernelWorkGroupSize;       /**< CL group Size returned by kernel */
 
 public:
-	cl_int *image;                        /**< image on the host */
+	unsigned char *image;                        /**< image on the host */
 
 public:
 	/** 
@@ -42,8 +45,8 @@ public:
 	* Initialize member variables
 	*/
 	GameOfLife(float p, int w, int h)
-		: population(p), width(w), height(h), image(NULL) {
-		imageSizeBytes = w*h*sizeof(int);
+		: population(p), width(w), height(h), image(NULL), paused(true) {
+		imageSizeBytes = w*h*sizeof(char);
 		sizeX = 16;
 		sizeY = 16;
 		globalSizeX = ((width + sizeX - 1) / sizeX);
@@ -63,21 +66,40 @@ public:
 	int nextGeneration();
 
 	/**
-	* Get the state of a cell
-	* @return state
-	*/
-	int getState(int x, int y);
-
-	/**
-	* Set the state of a cell
-	*/
-	void setState(int x, int y, int state);
-
-	/**
 	* Free memory
 	* @return 0 on success and -1 on failure
 	*/
 	int freeMem();
+
+	/**
+	* Get the state of a cell
+	* @return state
+	*/
+	unsigned char getState(int x, int y) {
+		return (image[x + (width*y)]);
+	}
+
+	/**
+	* Set the state of a cell
+	*/
+	void setState(int x, int y, unsigned char state) {
+		image[x + (width*y)] = state;
+	}
+
+	/**
+	* Get running state of GameOfLife
+	* @return paused
+	*/
+	bool isPaused() {
+		return paused;
+	}
+
+	/**
+	* Start/stop calculation of next generation
+	*/
+	void pause() {
+		paused = !paused;
+	}
 
 private:
 	/**

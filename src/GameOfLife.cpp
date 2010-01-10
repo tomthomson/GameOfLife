@@ -12,7 +12,7 @@ int GameOfLife::setup() {
 }
 
 int GameOfLife::setupHost() {
-	image = (int *) malloc(imageSizeBytes);
+	image = (unsigned char *) malloc(imageSizeBytes);
 	if(image == NULL)
 		return -1;
 
@@ -41,14 +41,6 @@ int GameOfLife::spawnPopulation() {
 	}
 
 	return 0;
-}
-
-int GameOfLife::getState(int x, int y) {
-	return (image[x + (width*y)]);
-}
-
-void GameOfLife::setState(int x, int y, int state) {
-	image[x + (width*y)] = state;
 }
 
 int GameOfLife::setupDevice(void) {
@@ -88,7 +80,7 @@ int GameOfLife::setupDevice(void) {
 		commandQueue = cl::CommandQueue(context, devices[0], 0, &status); assert(status == CL_SUCCESS);
 
 		/* Allocate the OpenCL buffer memory objects for the images on the device GMEM */
-		deviceImageA = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, imageSizeBytes, image, &status);
+		deviceImageA = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, imageSizeBytes, image, &status);
 		assert(status == CL_SUCCESS);
 		deviceImageB = cl::Buffer(context, CL_MEM_WRITE_ONLY, imageSizeBytes, NULL, &status);
 		assert(status == CL_SUCCESS);
@@ -107,14 +99,20 @@ int GameOfLife::setupDevice(void) {
 		/* Get a kernel object handle for a kernel with the given name */
 		kernel = cl::Kernel(program, "nextGeneration", &status); assert(status == CL_SUCCESS);
 
+		/* Set kernel arguments */
+		kernel.setArg(0, deviceImageA);		
+		kernel.setArg(1, deviceImageB);
+		kernel.setArg(2, width);
+		kernel.setArg(3, height);
+
 		/* Check group size against kernelWorkGroupSize */
 		status = kernel.getWorkGroupInfo(devices[0], CL_KERNEL_WORK_GROUP_SIZE, &kernelWorkGroupSize);
 		assert(status == CL_SUCCESS);
 
 		if((cl_uint)(sizeX*sizeY) > kernelWorkGroupSize) {
-			cerr<<"Out of Resources!"<<endl;
-			cerr<<"Group Size specified : "<<sizeX*sizeY<<endl;
-			cerr<<"Max Group Size supported on the kernel : "<<kernelWorkGroupSize<<endl;
+			cerr << "Out of Resources!" << endl;
+			cerr << "Group Size specified : " << sizeX*sizeY << endl;
+			cerr << "Max Group Size supported on the kernel : " << kernelWorkGroupSize << endl;
 			return -1;
 		}
 
@@ -137,16 +135,10 @@ int GameOfLife::nextGeneration(void) {
 	cl_int status = CL_SUCCESS;
 
 	try {
-		/* Set arguments to the kernel */
-		kernel.setArg(0,sizeof(cl_mem),(void*) &deviceImageA);		
-		kernel.setArg(1,sizeof(cl_mem),(void*) &deviceImageB);
-		kernel.setArg(2,sizeof(int),(void*) &width);
-		kernel.setArg(3,sizeof(int),(void*) &height);
-
 		/* Enqueue a kernel run call and wait for kernel to finish */
-		cl::KernelFunctor func = kernel.bind(commandQueue,
+		commandQueue.enqueueNDRangeKernel(kernel, cl::NullRange,
 			cl::NDRange(globalSizeX,globalSizeY), cl::NDRange(sizeX,sizeY));
-		func().wait();
+		commandQueue.finish();
 
 		/* Synchronous (i.e. blocking) read of results */
 		commandQueue.enqueueReadBuffer(deviceImageB, CL_TRUE, 0, imageSizeBytes, image, NULL, NULL);

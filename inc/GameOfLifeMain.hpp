@@ -6,16 +6,16 @@
 #define HEIGHT 1024
 
 /* chance to create a new individual in the starting population */
-#define POPULATION 0.3125
+#define POPULATION 0.03125
+
+/* Initialise OpenGL Utility Toolkit */
+void initGlut(int argc, char * argv[]);
+
+/* Initalise OpenGL Extension Wrangler Library */
+void initGlew(void);
 
 /* Initalise display */
 void initDisplay(int argc, char * argv[]);
-
-/* Initialise GLUT */
-void initGlut(int argc, char * argv[]);
-
-/* Initalise OpenGL */
-void initGL(void);
 
 /* OpenGL main loop */
 void mainLoopGL(void);

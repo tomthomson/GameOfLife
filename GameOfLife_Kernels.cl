@@ -1,13 +1,13 @@
-int getState(int x, int y, int width, __global int *image) {
+unsigned char getState(int x, int y, int width, __global unsigned char *image) {
 	return (image[x + (width*y)]);
 }
 
-void setState(int x, int y, int state, int width, __global int *image) {
+void setState(int x, int y, unsigned char state, int width, __global int8 *image) {
 	image[x + (width*y)] = state;
 }
 
-int getNumberOfNeighbours(const int x, const int y, const int width, const int height, __global int *image) {
-	
+int getNumberOfNeighbours(const int x, const int y, const int width,
+							const int height, __global unsigned char *image) {
 	int counter = 0;
 
 	for (int i=-1; i<=1; i++) {
@@ -18,32 +18,32 @@ int getNumberOfNeighbours(const int x, const int y, const int width, const int h
 			}
 		}
 	}
-	return counter;
-	
+	return counter;	
 }
 
-__kernel void nextGeneration(__global int *imageA, __global int *imageB, const int width, const int height) {
-	int state, n;
+__kernel void nextGeneration(__global unsigned char *imageA, __global unsigned char *imageB,
+								const int width, const int height) {
+	int n;
+	unsigned char state;
 
 	int x = get_global_id(0);
 	int y = get_global_id(1);
-
+	
 	if ((x<width) && (y<height) && (x>0) && (y>0)) {
 		n = getNumberOfNeighbours(x, y, width, height, imageA);
 		
 		state = getState(x, y, width, imageA);
-
-		if (state>0) {
+		
+		if (state==1) {
 			if ((n>3) || (n<2))
 				setState(x, y, 0, width, imageB);
 			else
-				setState(x, y, state==255?255:state+1, width, imageB);
+				setState(x, y, 1, width, imageB);
 		} else if (state==0) {
 			if (n==3)
 				setState(x, y, 1, width, imageB);
 			else
 				setState(x, y, 0, width, imageB);
 		}
-
 	}
 }
