@@ -2,11 +2,11 @@
 #define __GAMEOFLIFEMAIN_H_
 
 /* width and height of the image */
-#define WIDTH 1024
-#define HEIGHT 1024
+#define WIDTH 512
+#define HEIGHT 512
 
 /* chance to create a new individual in the starting population */
-#define POPULATION 0.03
+#define POPULATION 0.04
 
 /* Initialise OpenGL Utility Toolkit */
 void initGlut(int argc, char * argv[]);

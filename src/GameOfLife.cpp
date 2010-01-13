@@ -72,21 +72,35 @@ int GameOfLife::setupDevice(void) {
 		*/
 		cl_context_properties cps[3] = { CL_CONTEXT_PLATFORM, (cl_context_properties)(*pit)(), 0 };
 
-		/* Creating a context for a NVIDIA/AMD platform */
+		/* Creating a context for a platform with specified context properties */
 		context = cl::Context(CL_DEVICE_TYPE_GPU, cps, NULL, NULL, &status); assert(status == CL_SUCCESS);
 
-		/* Get the list of GPU devices associated with context */
+		/* Get the list of OpenCL devices associated with context */
 		devices = context.getInfo<CL_CONTEXT_DEVICES>();
-		//assert(devices.size() > 0);
+		assert(devices.size() > 0);
+
+		/* Test image support of OpenCL device */
+		if (!devices[0].getInfo<CL_DEVICE_IMAGE_SUPPORT>())
+			throw cl::Error(-666, "This OpenCL device does not support images");
 
 		/* Create command queue */
 		commandQueue = cl::CommandQueue(context, devices[0], 0, &status); assert(status == CL_SUCCESS);
 
 		/* Allocate the OpenCL buffer memory objects for the images on the device GMEM */
+		
 		deviceImageA = cl::Buffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, imageSizeBytes, image, &status);
 		assert(status == CL_SUCCESS);
 		deviceImageB = cl::Buffer(context, CL_MEM_WRITE_ONLY, imageSizeBytes, NULL, &status);
 		assert(status == CL_SUCCESS);
+		
+		/* Allocate the OpenCL image memory objects for the images on the device GMEM */
+		//cl::ImageFormat format = cl::ImageFormat(CL_LUMINANCE, CL_UNORM_INT8);
+		//deviceImageAi = cl::Image2D(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+		//	format, width, height, 0, image, &status);
+		//assert(status == CL_SUCCESS);
+		//deviceImageBi = cl::Image2D(context, CL_MEM_WRITE_ONLY,
+		//	format, width, height, 0, NULL, &status);
+		//assert(status == CL_SUCCESS);
 
 		/* Read in the OpenCL kernel from the source file */
 		if (!kernels.open(kernelFile)) {
@@ -194,7 +208,8 @@ int GameOfLife::nextGenerationOpenCL(void) {
 		commandQueue.finish();
 
 		/* Synchronous (i.e. blocking) read of results */
-		commandQueue.enqueueReadBuffer(deviceImageB, CL_TRUE, 0, imageSizeBytes, image, NULL, NULL);
+		cl::Event copy;
+		commandQueue.enqueueReadBuffer(deviceImageB, CL_TRUE, 0, imageSizeBytes, image, NULL, &copy);
 
 		return 0;
 	} catch (cl::Error err) {
@@ -211,9 +226,11 @@ int GameOfLife::freeMem() {
 	//commandQueue.release();
 	//context.release();
 
-	/* Release program resources */
+	/* Release host resources */
 	if(image)
 		free(image);
+	if(nextGenImage)
+		free(nextGenImage);
 
 	return 0;
 }

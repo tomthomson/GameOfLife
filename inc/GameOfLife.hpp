@@ -28,6 +28,8 @@ private:
 	cl::vector<cl::Device> devices;       /**< CL device list */
 	cl::Buffer        deviceImageA;       /**< CL memory buffer for first image on the device */
 	cl::Buffer        deviceImageB;       /**< CL memory buffer for second image on the device */
+	cl::Image2D       deviceImageAi;       /**< CL memory buffer for first image on the device */
+	cl::Image2D       deviceImageBi;       /**< CL memory buffer for second image on the device */
 	cl::CommandQueue  commandQueue;       /**< CL command queue */
 	cl::Program            program;       /**< CL program  */
 	cl::Kernel              kernel;       /**< CL kernel */
@@ -48,7 +50,7 @@ public:
 	*/
 	GameOfLife(float p, int w, int h)
 		: population(p), width(w), height(h), image(NULL),
-		useOpenCL(true), paused(true) {
+		nextGenImage(NULL),	useOpenCL(true), paused(true) {
 			imageSizeBytes = w*h*sizeof(char);
 			sizeX = 16;
 			sizeY = 16;
