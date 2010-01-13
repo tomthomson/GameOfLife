@@ -1,8 +1,11 @@
+/* properties for reading/writing images */
+const sampler_t imageSampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP | CLK_FILTER_NEAREST;
+
 unsigned char getState(int x, int y, int width, __global unsigned char *image) {
 	return (image[x + (width*y)]);
 }
 
-void setState(int x, int y, unsigned char state, int width, __global int8 *image) {
+void setState(int x, int y, unsigned char state, int width, __global unsigned char *image) {
 	image[x + (width*y)] = state;
 }
 

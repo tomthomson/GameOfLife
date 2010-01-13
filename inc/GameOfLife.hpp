@@ -20,7 +20,7 @@ private:
 	int                      width;       /**< width of image */
 	int                     height;       /**< height of image */
 	size_t          imageSizeBytes;       /**< size of image in bytes */
-	unsigned char    *nextGenImage;   /**< temp-image for CPU calculation */
+	unsigned char    *nextGenImage;       /**< temp-image for CPU calculation */
 
 	bool                    paused;       /**< start/stop calculation of next generation */
 
@@ -28,8 +28,8 @@ private:
 	cl::vector<cl::Device> devices;       /**< CL device list */
 	cl::Buffer        deviceImageA;       /**< CL memory buffer for first image on the device */
 	cl::Buffer        deviceImageB;       /**< CL memory buffer for second image on the device */
-	cl::Image2D       deviceImageAi;       /**< CL memory buffer for first image on the device */
-	cl::Image2D       deviceImageBi;       /**< CL memory buffer for second image on the device */
+	cl::Image2D      deviceImageAi;       /**< CL memory buffer for first image on the device */
+	cl::Image2D      deviceImageBi;       /**< CL memory buffer for second image on the device */
 	cl::CommandQueue  commandQueue;       /**< CL command queue */
 	cl::Program            program;       /**< CL program  */
 	cl::Kernel              kernel;       /**< CL kernel */
