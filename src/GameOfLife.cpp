@@ -16,6 +16,10 @@ int GameOfLife::setupHost() {
 	if(image == NULL)
 		return -1;
 
+	nextGenImage = (unsigned char *) malloc(imageSizeBytes);
+	if(nextGenImage == NULL)
+		return -1;
+
 	/* Spawn initial population */
 	if(spawnPopulation()!=0)
 		return -1;
@@ -24,19 +28,18 @@ int GameOfLife::setupHost() {
 }
 
 int GameOfLife::spawnPopulation() {
-	cout << "Spawning population for Game of Life with a chance of " << population << endl;
-	cout << "-------------------------------------------" << endl;
+	cout << "Spawning population for Game of Life with a chance of " << population << "..." << endl << endl;
 
 	int random, x, y;
 
 	srand(time(NULL));
 	for (x=0;x<width;x++) {
 		for (y=0;y<height;y++) {
-			random=rand() % 100;
-			if ((float)random/100.0f > population)
-				setState(x,y,0);
+			random = rand()%100;
+			if ((float) random/100.0f > population)
+				setState(x,y,0,image);
 			else
-				setState(x,y,1);
+				setState(x,y,1,image);
 		}
 	}
 
@@ -121,10 +124,10 @@ int GameOfLife::setupDevice(void) {
 		cerr << "ERROR: " << err.what() << "(" << err.err() << ")" << endl;
 		/* Get the build log for the first device */
 		/*try {
-			program.getBuildInfo(devices[0], CL_PROGRAM_BUILD_STATUS, &status);
-			cerr << "\nRetrieving build log\n"	<< status << endl;
+		program.getBuildInfo(devices[0], CL_PROGRAM_BUILD_STATUS, &status);
+		cerr << "\nRetrieving build log\n"	<< status << endl;
 		} catch (cl::Error err) {
-			cerr << "ERROR: " << err.what() << "(" << err.err() << ")" << endl;
+		cerr << "ERROR: " << err.what() << "(" << err.err() << ")" << endl;
 		}*/
 
 		return -1;
@@ -132,6 +135,56 @@ int GameOfLife::setupDevice(void) {
 }
 
 int GameOfLife::nextGeneration(void) {
+	if (!useOpenCL)
+		return nextGenerationCPU();
+	else
+		return nextGenerationOpenCL();
+}
+
+int GameOfLife::nextGenerationCPU(void) {
+	int n;
+	unsigned char state;
+
+	for (int x=1; x<width; x++) {
+		for (int y=1; y<height; y++) {
+			n = getNumberOfNeighbours(x, y);
+
+			state = getState(x, y);
+
+			if (state==1) {
+				if ((n>3) || (n<2))
+					setState(x, y, 0, nextGenImage);
+				else
+					setState(x, y, 1, nextGenImage);
+			} else if (state==0) {
+				if (n==3)
+					setState(x, y, 1, nextGenImage);
+				else
+					setState(x, y, 0, nextGenImage);
+			}
+		}
+	}
+
+	image = nextGenImage;
+	return 0;
+}
+
+int GameOfLife::getNumberOfNeighbours(const int x, const int y) {
+	int counter = 0;
+
+	for (int i=-1; i<=1; i++) {
+		for (int k=-1; k<=1; k++) {
+			if (!((i==0)&&(k==0)) && (x+i<width) && (y+k<height) && (x+i>0) && (y+k>0)) {
+				if (getState(x+i, y+k) > 0)
+					counter++;
+			}
+		}
+	}
+
+	return counter;
+}
+
+int GameOfLife::nextGenerationOpenCL(void) {
 	cl_int status = CL_SUCCESS;
 
 	try {

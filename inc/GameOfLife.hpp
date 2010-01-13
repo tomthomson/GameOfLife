@@ -1,17 +1,17 @@
 #ifndef GAMEOFLIFE_H_
 #define GAMEOFLIFE_H_
 
-#include <cassert>
-#include <ctime> // For time()
-#include <cstdlib> // For srand() and rand()
 #include <cstdio>
 #include <iostream>
 #include <fstream>
+#include <cassert>       /* for assert() */
+#include <ctime>         /* for time() */
+#include <cstdlib>       /* for srand() and rand() */
 #define __CL_ENABLE_EXCEPTIONS
 #define __NO_STD_VECTOR
 #define __NO_STD_STRING
 #include <CL/cl.hpp>
-//#include <CL/cl_gl.h> /* OpenCL/OpenGL interoperation */
+//#include <CL/cl_gl.h>    /* OpenCL/OpenGL interoperation */
 #include "../inc/KernelFile.hpp"
 
 class GameOfLife {
@@ -20,6 +20,7 @@ private:
 	int                      width;       /**< width of image */
 	int                     height;       /**< height of image */
 	size_t          imageSizeBytes;       /**< size of image in bytes */
+	unsigned char    *nextGenImage;   /**< temp-image for CPU calculation */
 
 	bool                    paused;       /**< start/stop calculation of next generation */
 
@@ -37,7 +38,8 @@ private:
 	size_t     kernelWorkGroupSize;       /**< CL group Size returned by kernel */
 
 public:
-	unsigned char *image;                        /**< image on the host */
+	bool                 useOpenCL;       /**< use OpenCL for calculation of next generation */
+	unsigned char           *image;       /**< image on the host that is displayed with OpenGL */
 
 public:
 	/** 
@@ -45,12 +47,13 @@ public:
 	* Initialize member variables
 	*/
 	GameOfLife(float p, int w, int h)
-		: population(p), width(w), height(h), image(NULL), paused(true) {
-		imageSizeBytes = w*h*sizeof(char);
-		sizeX = 16;
-		sizeY = 16;
-		globalSizeX = ((width + sizeX - 1) / sizeX);
-		globalSizeY = ((height + sizeY - 1) / sizeY);
+		: population(p), width(w), height(h), image(NULL),
+		useOpenCL(true), paused(true) {
+			imageSizeBytes = w*h*sizeof(char);
+			sizeX = 16;
+			sizeY = 16;
+			globalSizeX = ((width + sizeX - 1) / sizeX);
+			globalSizeY = ((height + sizeY - 1) / sizeY);
 	}
 
 	/**
@@ -64,6 +67,19 @@ public:
 	* @return 0 on success and -1 on failure
 	*/
 	int nextGeneration();
+
+	/**
+	* Calculate next generation with CPU
+	* @return 0 on success and -1 on failure
+	*/
+	int nextGenerationCPU();
+
+
+	/**
+	* Calculate next generation with OpenCL
+	* @return 0 on success and -1 on failure
+	*/
+	int nextGenerationOpenCL();
 
 	/**
 	* Free memory
@@ -82,9 +98,11 @@ public:
 	/**
 	* Set the state of a cell
 	*/
-	void setState(int x, int y, unsigned char state) {
+	void setState(int x, int y, unsigned char state, unsigned char *image) {
 		image[x + (width*y)] = state;
 	}
+
+	int getNumberOfNeighbours(const int x, const int y);
 
 	/**
 	* Get running state of GameOfLife
@@ -99,6 +117,7 @@ public:
 	*/
 	void pause() {
 		paused = !paused;
+		std::cout << (paused ? "Stopping ":"Starting ") << "calculation of next generation." << std::endl;
 	}
 
 private:

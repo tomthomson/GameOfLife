@@ -6,7 +6,7 @@
 #define HEIGHT 1024
 
 /* chance to create a new individual in the starting population */
-#define POPULATION 0.03125
+#define POPULATION 0.03
 
 /* Initialise OpenGL Utility Toolkit */
 void initGlut(int argc, char * argv[]);
