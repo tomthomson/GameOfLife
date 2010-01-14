@@ -149,12 +149,13 @@ int GameOfLife::setupDevice(void) {
 	} catch (cl::Error err) {
 		cerr << "ERROR: " << err.what() << "(" << err.err() << ")" << endl;
 		/* Get the build log for the first device */
-		/*try {
-		 program.getBuildInfo(devices[0], CL_PROGRAM_BUILD_STATUS, &status);
-		 cerr << "\nRetrieving build log\n"	<< status << endl;
-		 } catch (cl::Error err) {
-		 cerr << "ERROR: " << err.what() << "(" << err.err() << ")" << endl;
-		 }*/
+		try {
+			char *log;
+			//program.getBuildInfo(devices[0], CL_PROGRAM_BUILD_LOG, &log);
+			//cerr << "\nBuild log:\n"	<< log << "\n" << endl;
+		} catch (cl::Error err) {
+			cerr << "ERROR: " << err.what() << "(" << err.err() << ")" << endl;
+		}
 
 		return -1;
 	}

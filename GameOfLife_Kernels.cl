@@ -24,6 +24,32 @@ int getNumberOfNeighbours(const int x, const int y, const int width,
 	return counter;	
 }
 
+void nextGenerationWithImages(__read_only image2d_t imageA, __write_only image2d_t imageB, int width, int height) {
+	int n;
+	float4 state;
+
+	int x = get_global_id(0);
+	int y = get_global_id(1);
+
+	if ((x<width) && (y<height) && (x>0) && (y>0)) {
+		/*n = getNumberOfNeighbours(x, y, width, height, imageA);
+		state = getState(x, y, width, imageA);
+		
+		if (state.x==1) {
+			if ((n>3) || (n<2))
+				setState(x, y, 0, width, imageB);
+			else
+				setState(x, y, 1, width, imageB);
+		} else if (state.x==0) {
+			if (n==3)
+				setState(x, y, 1, width, imageB);
+			else
+				setState(x, y, 0, width, imageB);
+		}
+		*/
+	}
+}
+
 __kernel void nextGeneration(__global unsigned char *imageA, __global unsigned char *imageB,
 								const int width, const int height) {
 	int n;
@@ -34,7 +60,6 @@ __kernel void nextGeneration(__global unsigned char *imageA, __global unsigned c
 	
 	if ((x<width) && (y<height) && (x>0) && (y>0)) {
 		n = getNumberOfNeighbours(x, y, width, height, imageA);
-		
 		state = getState(x, y, width, imageA);
 		
 		if (state==1) {

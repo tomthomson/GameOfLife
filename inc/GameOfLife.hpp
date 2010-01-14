@@ -33,11 +33,11 @@ private:
 	cl::CommandQueue  commandQueue;       /**< CL command queue */
 	cl::Program            program;       /**< CL program  */
 	cl::Kernel              kernel;       /**< CL kernel */
-	size_t                   sizeX;       /**< NDRange parameters */
-	size_t                   sizeY;       /**< NDRange parameters */
-	size_t             globalSizeX;       /**< NDRange parameters */
-	size_t             globalSizeY;       /**< NDRange parameters */
-	size_t     kernelWorkGroupSize;       /**< CL group Size returned by kernel */
+	size_t                   sizeX;       /**< CL NDRange parameters */
+	size_t                   sizeY;       /**< CL NDRange parameters */
+	size_t             globalSizeX;       /**< CL NDRange parameters */
+	size_t             globalSizeY;       /**< CL NDRange parameters */
+	size_t     kernelWorkGroupSize;       /**< CL group size returned by kernel */
 
 public:
 	bool                 useOpenCL;       /**< use OpenCL for calculation of next generation */
