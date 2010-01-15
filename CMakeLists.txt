@@ -10,7 +10,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 #set(CMAKE_PREFIX_PATH "/home/thomson/apps/NVIDIA_GPU_Computing_SDK/shared/lib/linux")
 
 ###
-# find packages and include corresponding directories
+# find additional packages and include corresponding directories
 ###
 # OpenCL
 find_package(OpenCL REQUIRED)

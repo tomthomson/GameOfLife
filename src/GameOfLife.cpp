@@ -92,16 +92,7 @@ int GameOfLife::setupDevice(void) {
 		commandQueue = cl::CommandQueue(context, devices[0], 0, &status);
 		assert(status == CL_SUCCESS);
 
-		/* Allocate the OpenCL buffer memory objects for the images on the device GMEM */
-		deviceImageA = cl::Buffer(context, CL_MEM_READ_ONLY
-				| CL_MEM_COPY_HOST_PTR, imageSizeBytes, image, &status);
-		assert(status == CL_SUCCESS);
-		deviceImageB = cl::Buffer(context, CL_MEM_WRITE_ONLY, imageSizeBytes,
-				NULL, &status);
-		assert(status == CL_SUCCESS);
-
 		/* Allocate the OpenCL image memory objects for the images on the device GMEM */
-		/*
 		cl::ImageFormat format = cl::ImageFormat(CL_R, CL_UNORM_INT8);
 		deviceImageA = cl::Image2D(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
 			format, width, height, 0, image, &status);
@@ -109,7 +100,6 @@ int GameOfLife::setupDevice(void) {
 		deviceImageB = cl::Image2D(context, CL_MEM_WRITE_ONLY,
 			format, width, height, 0, NULL, &status);
 		assert(status == CL_SUCCESS);
-		*/
 
 		/* Read in the OpenCL kernel from the source file */
 		if (!kernels.open(kernelFile)) {
@@ -120,18 +110,16 @@ int GameOfLife::setupDevice(void) {
 				kernels.source().size()));
 		program = cl::Program(context, sources);
 
-		/* Create a cl program executable for all the devices specified */
+		/* Create a OpenCL program executable for all the devices specified */
 		program.build(devices);
 
-		/* Get a kernel object handle for a kernel with the given name */
+		/* Get a kernel object handle for the specified kernel */
 		kernel = cl::Kernel(program, "nextGeneration", &status);
 		assert(status == CL_SUCCESS);
 
 		/* Set kernel arguments */
 		kernel.setArg(0, deviceImageA);
 		kernel.setArg(1, deviceImageB);
-		kernel.setArg(2, width);
-		kernel.setArg(3, height);
 
 		return 0;
 	} catch (cl::Error err) {
@@ -211,13 +199,22 @@ int GameOfLife::nextGenerationOpenCL(void) {
 				cl::NDRange(width, height), cl::NullRange);
 		commandQueue.finish();
 
-		/* Synchronous (i.e. blocking) read of results */
-		cl::Event event;
-		commandQueue.enqueueReadBuffer(deviceImageB, CL_TRUE, 0,
-				imageSizeBytes, image, NULL, &event);
+		cl::size_t<3> origin;
+		origin.push_back(0);
+		origin.push_back(0);
+		origin.push_back(0);
+		cl::size_t<3> region;
+		region.push_back(width);
+		region.push_back(height);
+		region.push_back(1);
 
-		commandQueue.enqueueWriteBuffer(deviceImageA, CL_TRUE, 0,
-				imageSizeBytes, image, NULL, &event);
+		/* Synchronous (i.e. blocking) read of results */
+		commandQueue.enqueueReadImage(deviceImageB, CL_TRUE, origin, region, 0, 0,
+				image, NULL, NULL);
+
+		/* Write result image back to device */
+		commandQueue.enqueueWriteImage(deviceImageA, CL_TRUE, origin, region, 0, 0,
+				image, NULL, NULL);
 
 		return 0;
 	} catch (cl::Error err) {
