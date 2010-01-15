@@ -21,7 +21,7 @@ int getNumberOfNeighbours(const int x, const int y, const int width,
 			}
 		}
 	}
-	return counter;	
+	return counter;
 }
 
 void nextGenerationWithImages(__read_only image2d_t imageA, __write_only image2d_t imageB, int width, int height) {

@@ -108,7 +108,7 @@ void display2() {
 	glutSwapBuffers();
 	glFlush();
 
-	if(!GameOfLife.isPaused() && GameOfLife.nextGenerationOpenCL()!=0) {
+	if(!GameOfLife.isPaused() && GameOfLife.nextGeneration()!=0) {
 		freeMem();
 		exit(0);
 	}

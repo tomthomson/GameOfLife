@@ -33,7 +33,7 @@ int GameOfLife::spawnPopulation() {
 
 	int random, x, y;
 
-	srand( time(NULL));
+	srand(time(NULL));
 	for (x = 0; x < width; x++) {
 		for (y = 0; y < height; y++) {
 			random = rand() % 100;
@@ -85,7 +85,7 @@ int GameOfLife::setupDevice(void) {
 		assert(devices.size() > 0);
 
 		/* Test image support of OpenCL device */
-		if (!devices[0].getInfo<CL_DEVICE_IMAGE_SUPPORT> ())
+		if (!devices[0].getInfo<CL_DEVICE_IMAGE_SUPPORT>())
 			throw cl::Error(-666, "This OpenCL device does not support images");
 
 		/* Create command queue */
@@ -93,7 +93,6 @@ int GameOfLife::setupDevice(void) {
 		assert(status == CL_SUCCESS);
 
 		/* Allocate the OpenCL buffer memory objects for the images on the device GMEM */
-
 		deviceImageA = cl::Buffer(context, CL_MEM_READ_ONLY
 				| CL_MEM_COPY_HOST_PTR, imageSizeBytes, image, &status);
 		assert(status == CL_SUCCESS);
@@ -102,17 +101,19 @@ int GameOfLife::setupDevice(void) {
 		assert(status == CL_SUCCESS);
 
 		/* Allocate the OpenCL image memory objects for the images on the device GMEM */
+		/*
 		cl::ImageFormat format = cl::ImageFormat(CL_R, CL_UNORM_INT8);
-		deviceImageAi = cl::Image2D(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+		deviceImageA = cl::Image2D(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
 			format, width, height, 0, image, &status);
 		assert(status == CL_SUCCESS);
-		deviceImageBi = cl::Image2D(context, CL_MEM_WRITE_ONLY,
+		deviceImageB = cl::Image2D(context, CL_MEM_WRITE_ONLY,
 			format, width, height, 0, NULL, &status);
 		assert(status == CL_SUCCESS);
+		*/
 
 		/* Read in the OpenCL kernel from the source file */
 		if (!kernels.open(kernelFile)) {
-			cerr << "Couldn't load CL source code" << endl;
+			cerr << "Could not load CL source code" << endl;
 			return -1;
 		}
 		cl::Program::Sources sources(1, make_pair(kernels.source().data(),
@@ -132,29 +133,19 @@ int GameOfLife::setupDevice(void) {
 		kernel.setArg(2, width);
 		kernel.setArg(3, height);
 
-		/* Check group size against kernelWorkGroupSize */
-		status = kernel.getWorkGroupInfo(devices[0], CL_KERNEL_WORK_GROUP_SIZE,
-				&kernelWorkGroupSize);
-		assert(status == CL_SUCCESS);
-
-		if ((cl_uint)(sizeX * sizeY) > kernelWorkGroupSize) {
-			cerr << "Out of Resources!" << endl;
-			cerr << "Group Size specified : " << sizeX * sizeY << endl;
-			cerr << "Max Group Size supported on the kernel : "
-					<< kernelWorkGroupSize << endl;
-			return -1;
-		}
-
 		return 0;
 	} catch (cl::Error err) {
 		cerr << "ERROR: " << err.what() << "(" << err.err() << ")" << endl;
-		/* Get the build log for the first device */
-		try {
-			char *log;
-			//program.getBuildInfo(devices[0], CL_PROGRAM_BUILD_LOG, &log);
-			//cerr << "\nBuild log:\n"	<< log << "\n" << endl;
-		} catch (cl::Error err) {
-			cerr << "ERROR: " << err.what() << "(" << err.err() << ")" << endl;
+
+		/* If clBuildProgram failed get the build log for the first device */
+		if (!strcmp("clBuildProgram",err.what())) {
+			try {
+				char *log = (char *) malloc(2000);
+				program.getBuildInfo(devices[0], CL_PROGRAM_BUILD_LOG, log);
+				cerr << "\nBuild log:\n"	<< log << "\n" << endl;
+			} catch (cl::Error err) {
+				cerr << "ERROR: " << err.what() << "(" << err.err() << ")" << endl;
+			}
 		}
 
 		return -1;
@@ -175,11 +166,10 @@ int GameOfLife::nextGenerationCPU(void) {
 	for (int x = 1; x < width; x++) {
 		for (int y = 1; y < height; y++) {
 			n = getNumberOfNeighbours(x, y);
-
 			state = getState(x, y);
 
 			if (state == 1) {
-				if ((n > 3) || (n < 2))
+				if ((n < 2) || (n > 3))
 					setState(x, y, 0, nextGenImage);
 				else
 					setState(x, y, 1, nextGenImage);
@@ -192,7 +182,7 @@ int GameOfLife::nextGenerationCPU(void) {
 		}
 	}
 
-	image = nextGenImage;
+	memcpy(image, nextGenImage, imageSizeBytes);
 	return 0;
 }
 
@@ -217,14 +207,17 @@ int GameOfLife::nextGenerationOpenCL(void) {
 
 	try {
 		/* Enqueue a kernel run call and wait for kernel to finish */
-		commandQueue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(
-				globalSizeX, globalSizeY), cl::NDRange(sizeX, sizeY));
+		commandQueue.enqueueNDRangeKernel(kernel, cl::NullRange,
+				cl::NDRange(width, height), cl::NullRange);
 		commandQueue.finish();
 
 		/* Synchronous (i.e. blocking) read of results */
-		cl::Event copy;
+		cl::Event event;
 		commandQueue.enqueueReadBuffer(deviceImageB, CL_TRUE, 0,
-				imageSizeBytes, image, NULL, &copy);
+				imageSizeBytes, image, NULL, &event);
+
+		commandQueue.enqueueWriteBuffer(deviceImageA, CL_TRUE, 0,
+				imageSizeBytes, image, NULL, &event);
 
 		return 0;
 	} catch (cl::Error err) {
