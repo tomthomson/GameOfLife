@@ -9,10 +9,12 @@
 #include <cstdlib>       /* for srand() and rand() */
 #define __CL_ENABLE_EXCEPTIONS
 #define __NO_STD_VECTOR
-#define __NO_STD_STRING
-#include <CL/cl_fixed.hpp>
+#include <CL/cl.hpp>
 //#include <CL/cl_gl.h>    /* OpenCL/OpenGL interoperation */
 #include "../inc/KernelFile.hpp"
+
+#define ALIVE 255
+#define DEAD 0
 
 class GameOfLife {
 private:
@@ -23,16 +25,19 @@ private:
 	unsigned char    *nextGenImage;       /**< temp-image for CPU calculation */
 
 	bool                    paused;       /**< start/stop calculation of next generation */
+	bool                        ab;
 
 	cl::Context            context;       /**< CL context */
 	cl::vector<cl::Device> devices;       /**< CL device list */
-	//cl::Buffer        deviceImageA;       /**< CL memory buffer for first image on the device */
-	//cl::Buffer        deviceImageB;       /**< CL memory buffer for second image on the device */
-	cl::Image2D       deviceImageA;       /**< CL memory buffer for first image on the device */
-	cl::Image2D       deviceImageB;       /**< CL memory buffer for second image on the device */
+	cl::Image2D       deviceImageA;       /**< CL image buffer for first image on the device */
+	cl::Image2D       deviceImageB;       /**< CL image buffer for second image on the device */
 	cl::CommandQueue  commandQueue;       /**< CL command queue */
 	cl::Program            program;       /**< CL program  */
 	cl::Kernel              kernel;       /**< CL kernel */
+	
+	cl::Buffer             testBuf;
+	float                 *testVec;
+	size_t                testSize;
 
 public:
 	bool                 useOpenCL;       /**< use OpenCL for calculation of next generation */
@@ -45,8 +50,13 @@ public:
 	*/
 	GameOfLife(float p, int w, int h)
 		: population(p), width(w), height(h), image(NULL),
-		nextGenImage(NULL),	useOpenCL(true), paused(true) {
+		nextGenImage(NULL),	useOpenCL(true), paused(true)
+		{
 			imageSizeBytes = w*h*sizeof(char);
+			
+			testSize = 10*sizeof(float);
+			
+			ab = true;
 	}
 
 	/**
@@ -112,22 +122,36 @@ private:
 
 	/**
 	* Spawn initial population.
-	* @return 0 on success and -1 on failure
 	*/
-	int spawnPopulation();
-
+	void spawnPopulation();
+	
 	/**
-	* Calculate next generation with CPU.
-	* @return 0 on success and -1 on failure
+	* Spawn random population.
 	*/
-	int nextGenerationCPU();
-
+	void spawnRandomPopulation();
+	
+	/**
+	* Spawn predefined population.
+	*/
+	void spawnStaticPopulation();
 
 	/**
 	* Calculate next generation with OpenCL.
 	* @return 0 on success and -1 on failure
 	*/
 	int nextGenerationOpenCL();
+	
+	/**
+	* Calculate next generation with CPU.
+	* @return 0 on success and -1 on failure
+	*/
+	int nextGenerationCPU();
+	
+	/**
+	* Calculate the number of neighbours for a cell.
+	* @return number of neighbours
+	*/
+	int getNumberOfNeighbours(const int x, const int y);
 
 	/**
 	* Set the state of a cell.
@@ -135,12 +159,6 @@ private:
 	void setState(int x, int y, unsigned char state, unsigned char *image) {
 		image[x + (width*y)] = state;
 	}
-
-	/**
-	* Calculate the number of neighbours for a cell.
-	* @return number of neighbours
-	*/
-	int getNumberOfNeighbours(const int x, const int y);
 };
 
 #endif

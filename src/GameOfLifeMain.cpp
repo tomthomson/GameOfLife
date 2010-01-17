@@ -83,8 +83,8 @@ void display() {
 	for (int x=1; x<WIDTH; x++) {
 		for (int y=1; y<HEIGHT; y++) {
 			state = GameOfLife.getState(x,y);
-			if (state>0) {
-				glColor3f(0, 0, state);
+			if (state==255) {
+				glColor3f(1, 0, 0);
 				glVertex3f(x,y,0);
 			}
 		}
@@ -102,10 +102,12 @@ void display() {
 }
 
 void display2() {
-	globalImage = GameOfLife.image;
+	memcpy(globalImage, GameOfLife.image, HEIGHT*WIDTH*sizeof(char));
+	
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glDrawPixels(WIDTH, HEIGHT, GL_LUMINANCE, GL_UNSIGNED_BYTE,globalImage);
+	glDrawPixels(WIDTH, HEIGHT, GL_RED, GL_UNSIGNED_BYTE,globalImage);
 	glutSwapBuffers();
+	glutPostRedisplay();
 	glFlush();
 
 	if(!GameOfLife.isPaused() && GameOfLife.nextGeneration()!=0) {
@@ -148,7 +150,7 @@ void initGlut(int argc, char *argv[]) {
 	glClearColor(0.0, 0.0, 0.0, 1.0);
 
 	/* Initialise callbacks */
-	glutDisplayFunc(display);
+	glutDisplayFunc(display2);
 	glutIdleFunc(idle);
 	glutKeyboardFunc(keyboard);
 }
@@ -181,6 +183,8 @@ int main(int argc, char **argv) {
 		return -1;
 
 	/* Display GameOfLife board and calculate next generations */
+	globalImage = (unsigned char*) malloc (HEIGHT*WIDTH*sizeof(char));
+	
 	initDisplay(argc, argv);
 	showControls();
 	mainLoopGL();

@@ -21,30 +21,43 @@ int GameOfLife::setupHost() {
 		return -1;
 
 	/* Spawn initial population */
-	if (spawnPopulation() != 0)
-		return -1;
+	spawnPopulation();
 
 	return 0;
 }
 
-int GameOfLife::spawnPopulation() {
+void GameOfLife::spawnPopulation() {
+	//spawnRandomPopulation();
+	spawnStaticPopulation();
+}
+
+void GameOfLife::spawnRandomPopulation() {
 	cout << "Spawning population for Game of Life with a chance of "
 			<< population << "..." << endl << endl;
 
-	int random, x, y;
+	int random;
 
 	srand(time(NULL));
-	for (x = 0; x < width; x++) {
-		for (y = 0; y < height; y++) {
+	for (int x = 0; x < width; x++) {
+		for (int y = 0; y < height; y++) {
 			random = rand() % 100;
 			if ((float) random / 100.0f > population)
-				setState(x, y, 0, image);
+				setState(x, y, DEAD, image);
 			else
-				setState(x, y, 1, image);
+				setState(x, y, ALIVE, image);
 		}
 	}
+}
 
-	return 0;
+void GameOfLife::spawnStaticPopulation() {
+	for (int x = 0; x < width; x++) {
+		for (int y = 0; y < height; y++) {
+			setState(x, y, DEAD, image);
+		}
+	}
+	for (int x = 100; x < 110; x++) {
+		setState(x, 100, ALIVE, image);
+	}
 }
 
 int GameOfLife::setupDevice(void) {
@@ -94,11 +107,16 @@ int GameOfLife::setupDevice(void) {
 
 		/* Allocate the OpenCL image memory objects for the images on the device GMEM */
 		cl::ImageFormat format = cl::ImageFormat(CL_R, CL_UNORM_INT8);
-		deviceImageA = cl::Image2D(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+		deviceImageA = cl::Image2D(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
 			format, width, height, 0, image, &status);
 		assert(status == CL_SUCCESS);
-		deviceImageB = cl::Image2D(context, CL_MEM_WRITE_ONLY,
+		deviceImageB = cl::Image2D(context, CL_MEM_READ_WRITE,
 			format, width, height, 0, NULL, &status);
+		assert(status == CL_SUCCESS);
+		
+		testVec = (float*) malloc(10*sizeof(float));
+		testBuf = cl::Buffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
+			testSize, testVec, &status);
 		assert(status == CL_SUCCESS);
 
 		/* Read in the OpenCL kernel from the source file */
@@ -120,7 +138,8 @@ int GameOfLife::setupDevice(void) {
 		/* Set kernel arguments */
 		kernel.setArg(0, deviceImageA);
 		kernel.setArg(1, deviceImageB);
-
+		kernel.setArg(2, testBuf);
+		
 		return 0;
 	} catch (cl::Error err) {
 		cerr << "ERROR: " << err.what() << "(" << err.err() << ")" << endl;
@@ -128,9 +147,9 @@ int GameOfLife::setupDevice(void) {
 		/* If clBuildProgram failed get the build log for the first device */
 		if (!strcmp("clBuildProgram",err.what())) {
 			try {
-				char *log = (char *) malloc(2000);
-				program.getBuildInfo(devices[0], CL_PROGRAM_BUILD_LOG, log);
-				cerr << "\nBuild log:\n"	<< log << "\n" << endl;
+				cerr << "\nBuild log:\n";
+				cerr << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(devices[0]);;
+				cerr << "\n" << endl;
 			} catch (cl::Error err) {
 				cerr << "ERROR: " << err.what() << "(" << err.err() << ")" << endl;
 			}
@@ -141,10 +160,64 @@ int GameOfLife::setupDevice(void) {
 }
 
 int GameOfLife::nextGeneration(void) {
-	if (!useOpenCL)
-		return nextGenerationCPU();
-	else
+	if (useOpenCL)
 		return nextGenerationOpenCL();
+	else
+		return nextGenerationCPU();
+}
+
+int GameOfLife::nextGenerationOpenCL(void) {
+	cl_int status = CL_SUCCESS;
+	cl::size_t<3> origin;
+	origin.push_back(0);
+	origin.push_back(0);
+	origin.push_back(0);
+	cl::size_t<3> region;
+	region.push_back(width);
+	region.push_back(height);
+	region.push_back(1);
+
+	try {
+		/* Enqueue a kernel run call and wait for kernel to finish */
+		commandQueue.enqueueNDRangeKernel(kernel, cl::NullRange,
+				cl::NDRange(width, height), cl::NullRange);		
+		commandQueue.finish();
+		
+		/* Update first device image */
+		commandQueue.enqueueCopyImage(deviceImageB, deviceImageA,
+			origin, origin, region, NULL, NULL);
+		commandQueue.finish();
+		/* second version to switch images */
+		/*
+		if (ab) {
+			kernel.setArg(0, deviceImageB);
+			kernel.setArg(1, deviceImageA);
+			ab = false;
+		} else {
+			kernel.setArg(0, deviceImageA);
+			kernel.setArg(1, deviceImageB);
+			ab = true;
+		}
+		*/
+		
+		/* Synchronous (i.e. blocking) read of results */
+		commandQueue.enqueueReadImage(deviceImageA, CL_TRUE,
+			origin, region, 0, 0, image, NULL, NULL);
+		commandQueue.finish();
+		
+		commandQueue.enqueueReadBuffer(testBuf, CL_TRUE,
+			0, testSize, testVec, NULL, NULL);
+		commandQueue.finish();
+		
+		for (int i = 0; i < 10; i++)
+			cout << i << ": " << testVec[i] << endl;
+		paused = true;
+
+		return 0;
+	} catch (cl::Error err) {
+		cerr << "ERROR: " << err.what() << "(" << err.err() << ")" << endl;
+		return -1;
+	}
 }
 
 int GameOfLife::nextGenerationCPU(void) {
@@ -155,21 +228,21 @@ int GameOfLife::nextGenerationCPU(void) {
 		for (int y = 1; y < height; y++) {
 			n = getNumberOfNeighbours(x, y);
 			state = getState(x, y);
-
-			if (state == 1) {
+			
+			if (state == ALIVE) {
 				if ((n < 2) || (n > 3))
-					setState(x, y, 0, nextGenImage);
+					setState(x, y, DEAD, nextGenImage);
 				else
-					setState(x, y, 1, nextGenImage);
-			} else if (state == 0) {
+					setState(x, y, ALIVE, nextGenImage);
+			} else {
 				if (n == 3)
-					setState(x, y, 1, nextGenImage);
+					setState(x, y, ALIVE, nextGenImage);
 				else
-					setState(x, y, 0, nextGenImage);
+					setState(x, y, DEAD, nextGenImage);
 			}
 		}
 	}
-
+	
 	memcpy(image, nextGenImage, imageSizeBytes);
 	return 0;
 }
@@ -181,7 +254,7 @@ int GameOfLife::getNumberOfNeighbours(const int x, const int y) {
 		for (int k = -1; k <= 1; k++) {
 			if (!((i == 0) && (k == 0)) && (x + i < width) && (y + k < height)
 					&& (x + i > 0) && (y + k > 0)) {
-				if (getState(x + i, y + k) > 0)
+				if (getState(x + i, y + k) == ALIVE)
 					counter++;
 			}
 		}
@@ -190,46 +263,8 @@ int GameOfLife::getNumberOfNeighbours(const int x, const int y) {
 	return counter;
 }
 
-int GameOfLife::nextGenerationOpenCL(void) {
-	cl_int status = CL_SUCCESS;
-
-	try {
-		/* Enqueue a kernel run call and wait for kernel to finish */
-		commandQueue.enqueueNDRangeKernel(kernel, cl::NullRange,
-				cl::NDRange(width, height), cl::NullRange);
-		commandQueue.finish();
-
-		cl::size_t<3> origin;
-		origin.push_back(0);
-		origin.push_back(0);
-		origin.push_back(0);
-		cl::size_t<3> region;
-		region.push_back(width);
-		region.push_back(height);
-		region.push_back(1);
-
-		/* Synchronous (i.e. blocking) read of results */
-		commandQueue.enqueueReadImage(deviceImageB, CL_TRUE, origin, region, 0, 0,
-				image, NULL, NULL);
-
-		/* Write result image back to device */
-		commandQueue.enqueueWriteImage(deviceImageA, CL_TRUE, origin, region, 0, 0,
-				image, NULL, NULL);
-
-		return 0;
-	} catch (cl::Error err) {
-		cerr << "ERROR: " << err.what() << "(" << err.err() << ")" << endl;
-		return -1;
-	}
-}
-
 int GameOfLife::freeMem() {
 	/* Releases OpenCL resources */
-	//kernel.release();
-	//program.release();
-	//outputBuffer.release();
-	//commandQueue.release();
-	//context.release();
 
 	/* Release host resources */
 	if (image)
