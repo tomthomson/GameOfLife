@@ -19,7 +19,7 @@ using namespace std;
 GameOfLife GameOfLife(POPULATION, WIDTH, HEIGHT);
 
 /* Global variables */
-unsigned char *globalImage;
+static unsigned char *globalImage;
 
 /* Show parameter help */
 void showHelp() {
@@ -76,15 +76,15 @@ void display() {
 	glEnable(GL_BLEND);             /* enable blending */
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	glPointSize(2);
+	glPointSize(4);
 	unsigned char state;            /* state of the current cell */
 
 	glBegin(GL_POINTS);
 	for (int x=1; x<WIDTH; x++) {
 		for (int y=1; y<HEIGHT; y++) {
 			state = GameOfLife.getState(x,y);
-			if (state==255) {
-				glColor3f(1, 0, 0);
+			if (state==ALIVE) {
+				glColor3f(ALIVE/ALIVE, 0, 0);
 				glVertex3f(x,y,0);
 			}
 		}
@@ -102,18 +102,21 @@ void display() {
 }
 
 void display2() {
-	memcpy(globalImage, GameOfLife.image, HEIGHT*WIDTH*sizeof(char));
-	
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glDrawPixels(WIDTH, HEIGHT, GL_RED, GL_UNSIGNED_BYTE,globalImage);
+	glDrawPixels(WIDTH, HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, globalImage);
 	glutSwapBuffers();
 	glutPostRedisplay();
 	glFlush();
-
-	if(!GameOfLife.isPaused() && GameOfLife.nextGeneration()!=0) {
-		freeMem();
-		exit(0);
+	
+	if(!GameOfLife.isPaused()) {
+		if (GameOfLife.nextGeneration()==0) {
+			memcpy(globalImage, GameOfLife.image, GameOfLife.imageSizeBytes);
+		} else {
+			freeMem();
+			exit(0);
+		}
 	}
+	
 }
 
 /* Idle function */
@@ -143,14 +146,17 @@ void keyboard(unsigned char key, int mouseX, int mouseY) {
 void initGlut(int argc, char *argv[]) {
 	/* Initialise window */
 	glutInit(&argc, argv);
-	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_ALPHA | GLUT_DEPTH);	
+	glutInitDisplayMode(GLUT_DOUBLE |	// double buffer
+						GLUT_DEPTH  |	// depth buffer available
+						GLUT_RGBA   |	// color buffer with reg, green, blue, alpha
+						GLUT_ALPHA);
 	glutInitWindowSize(WIDTH, HEIGHT);
 	glutInitWindowPosition(100, 100);
 	glutCreateWindow("Conway's Game of Life with OpenCL");
 	glClearColor(0.0, 0.0, 0.0, 1.0);
 
 	/* Initialise callbacks */
-	glutDisplayFunc(display2);
+	glutDisplayFunc(display);
 	glutIdleFunc(idle);
 	glutKeyboardFunc(keyboard);
 }
@@ -182,9 +188,11 @@ int main(int argc, char **argv) {
 	if(GameOfLife.setup()!=0)
 		return -1;
 
-	/* Display GameOfLife board and calculate next generations */
-	globalImage = (unsigned char*) malloc (HEIGHT*WIDTH*sizeof(char));
+	/* Update global image for display2 */
+	//globalImage = (rgb*) malloc (GameOfLife.imageSizeBytes);
+	//memcpy(globalImage, GameOfLife.image, GameOfLife.imageSizeBytes);
 	
+	/* Display GameOfLife board and calculate next generations */
 	initDisplay(argc, argv);
 	showControls();
 	mainLoopGL();

@@ -21,7 +21,6 @@ private:
 	float               population;       /**< starting population density */
 	int                      width;       /**< width of image */
 	int                     height;       /**< height of image */
-	size_t          imageSizeBytes;       /**< size of image in bytes */
 	unsigned char    *nextGenImage;       /**< temp-image for CPU calculation */
 
 	bool                    paused;       /**< start/stop calculation of next generation */
@@ -31,6 +30,7 @@ private:
 	cl::vector<cl::Device> devices;       /**< CL device list */
 	cl::Image2D       deviceImageA;       /**< CL image buffer for first image on the device */
 	cl::Image2D       deviceImageB;       /**< CL image buffer for second image on the device */
+	size_t                rowPitch;
 	cl::CommandQueue  commandQueue;       /**< CL command queue */
 	cl::Program            program;       /**< CL program  */
 	cl::Kernel              kernel;       /**< CL kernel */
@@ -42,6 +42,7 @@ private:
 public:
 	bool                 useOpenCL;       /**< use OpenCL for calculation of next generation */
 	unsigned char           *image;       /**< image on the host that is displayed with OpenGL */
+	size_t          imageSizeBytes;       /**< size of image in bytes */
 
 public:
 	/** 
@@ -52,9 +53,11 @@ public:
 		: population(p), width(w), height(h), image(NULL),
 		nextGenImage(NULL),	useOpenCL(true), paused(true)
 		{
-			imageSizeBytes = w*h*sizeof(char);
+			imageSizeBytes = w*h*sizeof(char)*4;
 			
-			testSize = 10*sizeof(float);
+			rowPitch = w*sizeof(char)*4;
+			
+			testSize = 60*sizeof(float);
 			
 			ab = true;
 	}
@@ -157,7 +160,7 @@ private:
 	* Set the state of a cell.
 	*/
 	void setState(int x, int y, unsigned char state, unsigned char *image) {
-		image[x + (width*y)] = state;
+		image[4*x + (width*y)] = state;
 	}
 };
 

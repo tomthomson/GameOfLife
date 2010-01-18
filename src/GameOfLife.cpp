@@ -106,15 +106,15 @@ int GameOfLife::setupDevice(void) {
 		assert(status == CL_SUCCESS);
 
 		/* Allocate the OpenCL image memory objects for the images on the device GMEM */
-		cl::ImageFormat format = cl::ImageFormat(CL_R, CL_UNORM_INT8);
+		cl::ImageFormat format = cl::ImageFormat(CL_RGBA, CL_UNSIGNED_INT8);
 		deviceImageA = cl::Image2D(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
-			format, width, height, 0, image, &status);
+			format, width, height, rowPitch, image, &status);
 		assert(status == CL_SUCCESS);
 		deviceImageB = cl::Image2D(context, CL_MEM_READ_WRITE,
 			format, width, height, 0, NULL, &status);
 		assert(status == CL_SUCCESS);
 		
-		testVec = (float*) malloc(10*sizeof(float));
+		testVec = (float*) malloc(testSize);
 		testBuf = cl::Buffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
 			testSize, testVec, &status);
 		assert(status == CL_SUCCESS);
@@ -184,34 +184,47 @@ int GameOfLife::nextGenerationOpenCL(void) {
 		commandQueue.finish();
 		
 		/* Update first device image */
+		/*
 		commandQueue.enqueueCopyImage(deviceImageB, deviceImageA,
 			origin, origin, region, NULL, NULL);
 		commandQueue.finish();
+		*/
 		/* second version to switch images */
-		/*
+		
 		if (ab) {
 			kernel.setArg(0, deviceImageB);
 			kernel.setArg(1, deviceImageA);
+			commandQueue.enqueueReadImage(deviceImageB, CL_TRUE,
+				origin, region, rowPitch, 0, image, NULL, NULL);
 			ab = false;
 		} else {
 			kernel.setArg(0, deviceImageA);
 			kernel.setArg(1, deviceImageB);
+			commandQueue.enqueueReadImage(deviceImageA, CL_TRUE,
+				origin, region, rowPitch, 0, image, NULL, NULL);
 			ab = true;
 		}
-		*/
 		
 		/* Synchronous (i.e. blocking) read of results */
-		commandQueue.enqueueReadImage(deviceImageA, CL_TRUE,
-			origin, region, 0, 0, image, NULL, NULL);
-		commandQueue.finish();
+		//commandQueue.enqueueReadImage(deviceImageA, CL_TRUE,
+			//origin, region, 0, 0, image, NULL, NULL);
 		
+		/* Output test vector */
+		/*
 		commandQueue.enqueueReadBuffer(testBuf, CL_TRUE,
 			0, testSize, testVec, NULL, NULL);
-		commandQueue.finish();
 		
-		for (int i = 0; i < 10; i++)
-			cout << i << ": " << testVec[i] << endl;
-		paused = true;
+		for (int i = 0; i < 20; i++)
+			cout << (i%10);
+		for (int i = 0; i < 60; i++) {
+			if (i%20==0)
+				cout << endl;
+			cout << testVec[i]/255;
+		}
+		cout << endl;		
+		*/
+		/* Single generation mode */
+		//paused = true;
 
 		return 0;
 	} catch (cl::Error err) {
@@ -224,8 +237,8 @@ int GameOfLife::nextGenerationCPU(void) {
 	int n;
 	unsigned char state;
 
-	for (int x = 1; x < width; x++) {
-		for (int y = 1; y < height; y++) {
+	for (int x = 0; x < width; x++) {
+		for (int y = 0; y < height; y++) {
 			n = getNumberOfNeighbours(x, y);
 			state = getState(x, y);
 			
