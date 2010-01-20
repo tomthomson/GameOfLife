@@ -5,7 +5,7 @@ int GameOfLife::setup() {
 	if (setupHost() != 0)
 		return -1;
 
-	if (setupDevice() != 0)
+	if (useOpenCL && setupDevice() != 0)
 		return -1;
 
 	return 0;
@@ -27,16 +27,14 @@ int GameOfLife::setupHost() {
 }
 
 void GameOfLife::spawnPopulation() {
-	//spawnRandomPopulation();
-	spawnStaticPopulation();
+	spawnRandomPopulation();
+	//spawnStaticPopulation();
 }
 
 void GameOfLife::spawnRandomPopulation() {
 	cout << "Spawning population for Game of Life with a chance of "
 			<< population << "..." << endl << endl;
-
 	int random;
-
 	srand(time(NULL));
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++) {
@@ -66,6 +64,9 @@ int GameOfLife::setupDevice(void) {
 	KernelFile kernels;
 
 	try {
+		/**
+		* Create context for OpenCL device
+		*/
 		/* Get platform information for a NVIDIA or ATI GPU */
 		cl::vector<cl::Platform> platforms;
 		cl::Platform::get(&platforms);
@@ -84,11 +85,13 @@ int GameOfLife::setupDevice(void) {
 
 		/* 
 		 * If there is a NVIDIA or ATI GPU, use it,
-		 * else pass a NULL and get whatever the implementation thinks we should be using
+		 * else pass a NULL and get whatever the
+		 * implementation thinks we should be using
 		 */
-		cl_context_properties cps[3] = { CL_CONTEXT_PLATFORM,
+		cl_context_properties cps[3] = {
+				CL_CONTEXT_PLATFORM,
 				(cl_context_properties)(*pit)(), 0 };
-
+		
 		/* Creating a context for a platform with specified context properties */
 		context = cl::Context(CL_DEVICE_TYPE_GPU, cps, NULL, NULL, &status);
 		assert(status == CL_SUCCESS);
@@ -96,29 +99,54 @@ int GameOfLife::setupDevice(void) {
 		/* Get the list of OpenCL devices associated with context */
 		devices = context.getInfo<CL_CONTEXT_DEVICES> ();
 		assert(devices.size() > 0);
-
+		
+		/**
+		* Test device skills
+		*/
 		/* Test image support of OpenCL device */
 		if (!devices[0].getInfo<CL_DEVICE_IMAGE_SUPPORT>())
 			throw cl::Error(-666, "This OpenCL device does not support images");
-
-		/* Create command queue */
+			
+		/* Test OpenGL sharing support of OpenCL device */
+		/*
+		#ifdef cl_khr_sharing
+			cout << "cl_khr_sharing supported" << std::endl;
+		#else
+			throw cl::Error(-667, "This OpenCL device does not support OpenGL sharing");
+		#endif
+		*/
+		
+		/**
+		* Create command queue
+		*/
 		commandQueue = cl::CommandQueue(context, devices[0], 0, &status);
 		assert(status == CL_SUCCESS);
-
-		/* Allocate the OpenCL image memory objects for the images on the device GMEM */
+		
+		/**
+		* Allocate device memory
+		*/
+		/* Allocate image objects in constant memory */
 		cl::ImageFormat format = cl::ImageFormat(CL_RGBA, CL_UNSIGNED_INT8);
+		// imageA
 		deviceImageA = cl::Image2D(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
 			format, width, height, rowPitch, image, &status);
 		assert(status == CL_SUCCESS);
+		// imageB
 		deviceImageB = cl::Image2D(context, CL_MEM_READ_WRITE,
 			format, width, height, 0, NULL, &status);
 		assert(status == CL_SUCCESS);
 		
-		testVec = (float*) malloc(testSize);
-		testBuf = cl::Buffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
-			testSize, testVec, &status);
-		assert(status == CL_SUCCESS);
-
+		/* Allocate buffer object for test output in global memory */
+		if (test) {
+			testVec = (float *)malloc(testSize);
+			testBuf = cl::Buffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
+				testSize, testVec, &status);
+			assert(status == CL_SUCCESS);
+		}
+		
+		/**
+		* Create program and build kernel
+		*/
 		/* Read in the OpenCL kernel from the source file */
 		if (!kernels.open(kernelFile)) {
 			cerr << "Could not load CL source code" << endl;
@@ -138,7 +166,9 @@ int GameOfLife::setupDevice(void) {
 		/* Set kernel arguments */
 		kernel.setArg(0, deviceImageA);
 		kernel.setArg(1, deviceImageB);
-		kernel.setArg(2, testBuf);
+		kernel.setArg(2, rules);
+		if (test)
+			kernel.setArg(3, testBuf);
 		
 		return 0;
 	} catch (cl::Error err) {
@@ -189,6 +219,11 @@ int GameOfLife::nextGenerationOpenCL(void) {
 			origin, origin, region, NULL, NULL);
 		commandQueue.finish();
 		*/
+		/* Synchronous (i.e. blocking) read of results */
+		/*
+		commandQueue.enqueueReadImage(deviceImageA, CL_TRUE,
+			origin, region, 0, 0, image, NULL, NULL);
+		*/
 		/* second version to switch images */
 		
 		if (ab) {
@@ -205,26 +240,23 @@ int GameOfLife::nextGenerationOpenCL(void) {
 			ab = true;
 		}
 		
-		/* Synchronous (i.e. blocking) read of results */
-		//commandQueue.enqueueReadImage(deviceImageA, CL_TRUE,
-			//origin, region, 0, 0, image, NULL, NULL);
-		
 		/* Output test vector */
-		/*
-		commandQueue.enqueueReadBuffer(testBuf, CL_TRUE,
-			0, testSize, testVec, NULL, NULL);
-		
-		for (int i = 0; i < 20; i++)
-			cout << (i%10);
-		for (int i = 0; i < 60; i++) {
-			if (i%20==0)
-				cout << endl;
-			cout << testVec[i]/255;
+		if (test) {
+			commandQueue.enqueueReadBuffer(testBuf, CL_TRUE,
+				0, testSize, testVec, NULL, NULL);
+			
+			for (int i = 0; i < 20; i++)
+				cout << (i%10) << "|";
+			for (int i = 0; i < 60; i++) {
+				if (i%20==0)
+					cout << endl;
+				cout << testVec[i] << "|";
+			}
+			cout << endl;
 		}
-		cout << endl;		
-		*/
+		
 		/* Single generation mode */
-		//paused = true;
+		//pause();
 
 		return 0;
 	} catch (cl::Error err) {
@@ -244,14 +276,14 @@ int GameOfLife::nextGenerationCPU(void) {
 			
 			if (state == ALIVE) {
 				if ((n < 2) || (n > 3))
-					setState(x, y, DEAD, nextGenImage);
+					setState(x, y, state-5, nextGenImage);
 				else
 					setState(x, y, ALIVE, nextGenImage);
 			} else {
 				if (n == 3)
 					setState(x, y, ALIVE, nextGenImage);
 				else
-					setState(x, y, DEAD, nextGenImage);
+					setState(x, y, state==0?0:state-5, nextGenImage);
 			}
 		}
 	}
@@ -262,12 +294,18 @@ int GameOfLife::nextGenerationCPU(void) {
 
 int GameOfLife::getNumberOfNeighbours(const int x, const int y) {
 	int counter = 0;
+	int neighbourCoord[2];
 
 	for (int i = -1; i <= 1; i++) {
 		for (int k = -1; k <= 1; k++) {
-			if (!((i == 0) && (k == 0)) && (x + i < width) && (y + k < height)
-					&& (x + i > 0) && (y + k > 0)) {
-				if (getState(x + i, y + k) == ALIVE)
+			neighbourCoord[0] = x + i;
+			neighbourCoord[1] = y + k;
+			if (!((i == 0) && (k == 0))
+				&& (neighbourCoord[0] < width)
+				&& (neighbourCoord[1] < height)
+				&& (x + i > 0) && (y + k > 0))
+				{
+				if (getState(neighbourCoord[0], neighbourCoord[1]) == ALIVE)
 					counter++;
 			}
 		}
@@ -278,12 +316,14 @@ int GameOfLife::getNumberOfNeighbours(const int x, const int y) {
 
 int GameOfLife::freeMem() {
 	/* Releases OpenCL resources */
+	if (useOpenCL) {
+	}
 
 	/* Release host resources */
 	if (image)
-		free( image);
+		free(image);
 	if (nextGenImage)
-		free( nextGenImage);
+		free(nextGenImage);
 
 	return 0;
 }

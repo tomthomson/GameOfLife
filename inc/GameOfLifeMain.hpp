@@ -1,26 +1,34 @@
 #ifndef __GAMEOFLIFEMAIN_H_
 #define __GAMEOFLIFEMAIN_H_
 
-/* width and height of the image */
-#define WIDTH 512
-#define HEIGHT 512
+/** 
+* Rules for calculating next generation
+* 0:	Standard rules by John Conway
+  ---------------------------------
+	Live cell:
+		Survives, if it has two or three live neighbours.
+		Dies, if it has one, two or more than thrre live neighbours.
+	Dead cell:
+		Becomes live cell, if it has exactly three live neighbours.
+		Stays dead, if it has not three live neighbours.
+	
+* 1:	Custom rule
+  -----------------
+	Live cell:
+	Dead cell:
+*/
+#define RULES 0
 
-/* chance to create a new individual in the starting population */
+/** 
+* Chance to create a new individual
+* when using random starting population
+*/
 #define POPULATION 0.04
 
-/* Initialise OpenGL Utility Toolkit */
-void initGlut(int argc, char * argv[]);
-
-/* Initalise OpenGL Extension Wrangler Library */
-void initGlew(void);
-
-/* Initalise display */
-void initDisplay(int argc, char * argv[]);
-
-/* OpenGL main loop */
-void mainLoopGL(void);
-
-/* Free host/device memory */
-void cleanup(void);
+/**
+* Width and height of the Game of Life board
+*/
+#define WIDTH 512
+#define HEIGHT 512
 
 #endif

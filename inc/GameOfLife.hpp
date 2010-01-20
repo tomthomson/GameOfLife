@@ -7,59 +7,66 @@
 #include <cassert>       /* for assert() */
 #include <ctime>         /* for time() */
 #include <cstdlib>       /* for srand() and rand() */
+#include "../inc/KernelFile.hpp"
+/* OpenCL definitions */
 #define __CL_ENABLE_EXCEPTIONS
 #define __NO_STD_VECTOR
 #include <CL/cl.hpp>
-//#include <CL/cl_gl.h>    /* OpenCL/OpenGL interoperation */
-#include "../inc/KernelFile.hpp"
+#pragma OPENCL EXTENSION cl_khr_gl_sharing : enable /* enable OpenGL sharing */
+#define cl_khr_gl_sharing
+#include <CL/cl_gl.h>    /* OpenCL/OpenGL interoperation */
 
+/* global definition of live and dead state */
 #define ALIVE 255
 #define DEAD 0
 
 class GameOfLife {
 private:
-	float               population;       /**< starting population density */
-	int                      width;       /**< width of image */
-	int                     height;       /**< height of image */
-	unsigned char    *nextGenImage;       /**< temp-image for CPU calculation */
+	unsigned char            rules;    /**< rules for calculating next generation */
+	float               population;    /**< chance to create new individual when
+	                                        using random starting population */
+	int                      width;    /**< width of image */
+	int                     height;    /**< height of image */
+	unsigned char    *nextGenImage;    /**< temp-image for CPU calculation */
+	bool                        ab;    /**< switch for image exchange */
 
-	bool                    paused;       /**< start/stop calculation of next generation */
-	bool                        ab;
+	bool                    paused;    /**< start/stop calculation of next generation */
 
-	cl::Context            context;       /**< CL context */
-	cl::vector<cl::Device> devices;       /**< CL device list */
-	cl::Image2D       deviceImageA;       /**< CL image buffer for first image on the device */
-	cl::Image2D       deviceImageB;       /**< CL image buffer for second image on the device */
-	size_t                rowPitch;
-	cl::CommandQueue  commandQueue;       /**< CL command queue */
-	cl::Program            program;       /**< CL program  */
-	cl::Kernel              kernel;       /**< CL kernel */
+	cl::Context            context;    /**< CL context */
+	cl::vector<cl::Device> devices;    /**< CL device list */
+	cl::Image2D       deviceImageA;    /**< CL image object for first image */
+	cl::Image2D       deviceImageB;    /**< CL image object for second image */
+	size_t                rowPitch;    /**< CL row pitch for image objects */
+	cl::CommandQueue  commandQueue;    /**< CL command queue */
+	cl::Program            program;    /**< CL program  */
+	cl::Kernel              kernel;    /**< CL kernel */
 	
-	cl::Buffer             testBuf;
 	float                 *testVec;
+	cl::Buffer             testBuf;
 	size_t                testSize;
+	bool                      test;
 
 public:
-	bool                 useOpenCL;       /**< use OpenCL for calculation of next generation */
-	unsigned char           *image;       /**< image on the host that is displayed with OpenGL */
-	size_t          imageSizeBytes;       /**< size of image in bytes */
+	bool                 useOpenCL;    /**< CPU/OpenCL switch for calculating next generation*/
+	unsigned char           *image;    /**< image on the host that is displayed with OpenGL */
+	size_t          imageSizeBytes;    /**< size of image in bytes */
 
 public:
 	/** 
 	* Constructor.
 	* Initialize member variables
 	*/
-	GameOfLife(float p, int w, int h)
-		: population(p), width(w), height(h), image(NULL),
-		nextGenImage(NULL),	useOpenCL(true), paused(true)
+	GameOfLife(unsigned char r, float p, int w, int h)
+			: rules(r), population(p), width(w), height(h),
+			image(NULL), nextGenImage(NULL), useOpenCL(true), paused(true)
 		{
 			imageSizeBytes = w*h*sizeof(char)*4;
-			
 			rowPitch = w*sizeof(char)*4;
-			
-			testSize = 60*sizeof(float);
-			
 			ab = true;
+			
+			test = false;
+			if (test)
+				testSize = 60*sizeof(float);
 	}
 
 	/**
@@ -79,7 +86,7 @@ public:
 	* @return state
 	*/
 	unsigned char getState(int x, int y) {
-		return (image[x + (width*y)]);
+		return (image[4*x + (4*width*y)]);
 	}
 
 	/**
@@ -160,7 +167,10 @@ private:
 	* Set the state of a cell.
 	*/
 	void setState(int x, int y, unsigned char state, unsigned char *image) {
-		image[4*x + (width*y)] = state;
+		image[4*x + (4*width*y)] = state;
+		image[(4*x+1) + (4*width*y)] = state;
+		image[(4*x+2) + (4*width*y)] = state;
+		image[(4*x+3) + (4*width*y)] = 1;
 	}
 };
 

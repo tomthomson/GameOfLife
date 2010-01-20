@@ -16,7 +16,7 @@
 using namespace std;
 
 /* Create an instance of GameOfLife */
-GameOfLife GameOfLife(POPULATION, WIDTH, HEIGHT);
+GameOfLife GameOfLife(RULES, POPULATION, WIDTH, HEIGHT);
 
 /* Global variables */
 static unsigned char *globalImage;
@@ -76,15 +76,17 @@ void display() {
 	glEnable(GL_BLEND);             /* enable blending */
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	glPointSize(4);
+	glPointSize(1);
 	unsigned char state;            /* state of the current cell */
 
 	glBegin(GL_POINTS);
-	for (int x=1; x<WIDTH; x++) {
-		for (int y=1; y<HEIGHT; y++) {
+	for (int x=0; x<WIDTH; x++) {
+		for (int y=0; y<HEIGHT; y++) {
 			state = GameOfLife.getState(x,y);
-			if (state==ALIVE) {
-				glColor3f(ALIVE/ALIVE, 0, 0);
+			if (state>0) {
+				glColor3f((float)state/(float)ALIVE,
+							(float)state/(float)ALIVE,
+							(float)state/(float)ALIVE);
 				glVertex3f(x,y,0);
 			}
 		}
@@ -156,7 +158,7 @@ void initGlut(int argc, char *argv[]) {
 	glClearColor(0.0, 0.0, 0.0, 1.0);
 
 	/* Initialise callbacks */
-	glutDisplayFunc(display);
+	glutDisplayFunc(display2);
 	glutIdleFunc(idle);
 	glutKeyboardFunc(keyboard);
 }
@@ -189,8 +191,8 @@ int main(int argc, char **argv) {
 		return -1;
 
 	/* Update global image for display2 */
-	//globalImage = (rgb*) malloc (GameOfLife.imageSizeBytes);
-	//memcpy(globalImage, GameOfLife.image, GameOfLife.imageSizeBytes);
+	globalImage = (unsigned char*) malloc (GameOfLife.imageSizeBytes);
+	memcpy(globalImage, GameOfLife.image, GameOfLife.imageSizeBytes);
 	
 	/* Display GameOfLife board and calculate next generations */
 	initDisplay(argc, argv);
