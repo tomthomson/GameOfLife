@@ -119,7 +119,7 @@ int GameOfLife::setupDevice(void) {
 		/**
 		* Create command queue
 		*/
-		commandQueue = cl::CommandQueue(context, devices[0], 0, &status);
+		commandQueue = cl::CommandQueue(context, devices[0], CL_QUEUE_PROFILING_ENABLE, &status);
 		assert(status == CL_SUCCESS);
 		
 		/**
@@ -206,12 +206,18 @@ int GameOfLife::nextGenerationOpenCL(void) {
 	region.push_back(width);
 	region.push_back(height);
 	region.push_back(1);
+	cl::Event kernelEvent;
+	float executionTime;
 
 	try {
 		/* Enqueue a kernel run call and wait for kernel to finish */
 		commandQueue.enqueueNDRangeKernel(kernel, cl::NullRange,
-				cl::NDRange(width, height), cl::NullRange);		
+				cl::NDRange(width, height), cl::NullRange, NULL, &kernelEvent);		
 		commandQueue.finish();
+
+		executionTime = (kernelEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() -
+						kernelEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>()) * 1.0e-6f;
+		cout << executionTime << endl;
 		
 		/* Update first device image */
 		/*
@@ -269,6 +275,11 @@ int GameOfLife::nextGenerationCPU(void) {
 	int n;
 	unsigned char state;
 
+	timeval start;
+    timeval end;
+
+	gettimeofday(&start, 0);
+	
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++) {
 			n = getNumberOfNeighbours(x, y);
@@ -287,6 +298,12 @@ int GameOfLife::nextGenerationCPU(void) {
 			}
 		}
 	}
+
+	gettimeofday(&end, 0);
+	cout << (float)(end.tv_usec - start.tv_usec) / 1000.0f << endl;
+	//counter++;
+	//average += ((float)(end.tv_usec - start.tv_usec) / 1000.0f);
+	//cout << average / (float)counter << endl;
 	
 	memcpy(image, nextGenImage, imageSizeBytes);
 	return 0;

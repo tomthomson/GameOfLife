@@ -6,6 +6,8 @@
 #include <fstream>
 #include <cassert>       /* for assert() */
 #include <ctime>         /* for time() */
+#include <unistd.h>
+#include <sys/time.h>
 #include <cstdlib>       /* for srand() and rand() */
 #include "../inc/KernelFile.hpp"
 /* OpenCL definitions */
@@ -46,6 +48,9 @@ private:
 	size_t                testSize;
 	bool                      test;
 
+	float average;
+	int counter;
+
 public:
 	bool                 useOpenCL;    /**< CPU/OpenCL switch for calculating next generation*/
 	unsigned char           *image;    /**< image on the host that is displayed with OpenGL */
@@ -67,6 +72,9 @@ public:
 			test = false;
 			if (test)
 				testSize = 60*sizeof(float);
+
+			average = 0.0f;
+			counter = 0;
 	}
 
 	/**
