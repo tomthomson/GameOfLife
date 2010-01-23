@@ -12,11 +12,11 @@ int GameOfLife::setup() {
 }
 
 int GameOfLife::setupHost() {
-	image = (unsigned char *) malloc(imageSizeBytes);
+	image = (unsigned char *)malloc(imageSizeBytes);
 	if (image == NULL)
 		return -1;
 
-	nextGenImage = (unsigned char *) malloc(imageSizeBytes);
+	nextGenImage = (unsigned char *)malloc(imageSizeBytes);
 	if (nextGenImage == NULL)
 		return -1;
 
@@ -27,8 +27,8 @@ int GameOfLife::setupHost() {
 }
 
 void GameOfLife::spawnPopulation() {
-	spawnRandomPopulation();
-	//spawnStaticPopulation();
+	//spawnRandomPopulation();
+	spawnStaticPopulation();
 }
 
 void GameOfLife::spawnRandomPopulation() {
@@ -62,131 +62,157 @@ int GameOfLife::setupDevice(void) {
 	cl_int status = CL_SUCCESS;
 	const char* kernelFile = "GameOfLife_Kernels.cl";
 	KernelFile kernels;
-
-	try {
-		/**
-		* Create context for OpenCL device
-		*/
-		/* Get platform information for a NVIDIA or ATI GPU */
-		cl::vector<cl::Platform> platforms;
-		cl::Platform::get(&platforms);
-		cl::vector<cl::Platform>::iterator pit;
-
-		if (platforms.size() > 0) {
-			for (pit = platforms.begin(); pit != platforms.end(); pit++) {
-				if (!strcmp((*pit).getInfo<CL_PLATFORM_VENDOR>().c_str(),
-						"Advanced Micro Devices, Inc.") ||
-						!strcmp((*pit).getInfo<CL_PLATFORM_VENDOR> ().c_str(),
-						"NVIDIA Corporation")) {
-					break;
-				}
+	
+	/*
+	 * From the available platforms use preferably AMD or NVIDIA
+	 */
+	cl_uint numberOfPlatforms;
+	cl_platform_id platform = NULL;
+	status = clGetPlatformIDs(0, NULL, &numberOfPlatforms);
+	assert(status == CL_SUCCESS);
+	
+	if(numberOfPlatforms > 0) {
+		cl_platform_id* platforms = new cl_platform_id[numberOfPlatforms];
+		status = clGetPlatformIDs(numberOfPlatforms, platforms, NULL);
+		assert(status == CL_SUCCESS);
+		
+		for(unsigned int i=0; i < numberOfPlatforms; i++) {
+			char vendor[100];
+			status = clGetPlatformInfo(platforms[i], CL_PLATFORM_VENDOR,
+						sizeof(vendor), vendor, NULL);
+			platform = platforms[i];
+			if(!strcmp(vendor, "Advanced Micro Devices, Inc.")
+				|| !strcmp(vendor, "NVIDIA Corporation")) {
+				break;
 			}
 		}
-
-		/* 
-		 * If there is a NVIDIA or ATI GPU, use it,
-		 * else pass a NULL and get whatever the
-		 * implementation thinks we should be using
-		 */
-		cl_context_properties cps[3] = {
-				CL_CONTEXT_PLATFORM,
-				(cl_context_properties)(*pit)(), 0 };
 		
-		/* Creating a context for a platform with specified context properties */
-		context = cl::Context(CL_DEVICE_TYPE_GPU, cps, NULL, NULL, &status);
+		delete platforms;
+	}
+
+	/* 
+	 * If there is a NVIDIA or AMD platform, use it.
+	 * Else pass a NULL and get whatever the
+	 * implementation thinks we should be using.
+	 */
+	cl_context_properties cps[3] = { CL_CONTEXT_PLATFORM,
+									(cl_context_properties)platform, 0 };
+	cl_context_properties* cprops = (NULL == platform) ? NULL : cps;
+	
+	/**
+	* Create context for OpenCL platform with specified context properties
+	*/
+	context = clCreateContextFromType(cprops, CL_DEVICE_TYPE_GPU, NULL, NULL, &status);
+	assert(status == CL_SUCCESS);
+	
+	/* Get the size of device list data */
+	size_t deviceListSize;
+	status = clGetContextInfo(context, CL_CONTEXT_DEVICES, 0, NULL, &deviceListSize);
+	assert(status == CL_SUCCESS);
+	
+	devices = (cl_device_id *)malloc(deviceListSize);
+	assert(devices > 0);
+	
+	/* Get the device list data */
+	status = clGetContextInfo(context, CL_CONTEXT_DEVICES, deviceListSize, devices, NULL);
+	assert(status == CL_SUCCESS);
+	
+	/**
+	* Check OpenCL device skills
+	*/
+	/* Check image support */
+	cl_bool imageSupport;
+	status = clGetDeviceInfo(devices[0], CL_DEVICE_IMAGE_SUPPORT,
+								sizeof(cl_bool), &imageSupport, NULL);
+	assert(status == CL_SUCCESS && imageSupport == CL_TRUE);
+	/* Check OpenGL sharing support */
+	/*
+	#ifdef cl_khr_sharing
+		cout << "cl_khr_sharing supported" << std::endl;
+	#else
+		throw cl::Error(-667, "This OpenCL device does not support OpenGL sharing");
+	#endif
+	*/
+	
+	/**
+	* Create OpenCL command queue with profiling support
+	*/
+	commandQueue = clCreateCommandQueue(context, devices[0],
+							CL_QUEUE_PROFILING_ENABLE, &status);
+	assert(status == CL_SUCCESS);
+	
+	/**
+	* Allocate device memory
+	*/
+	/* Allocate image objects in texture memory */
+	cl_image_format format;
+	format.image_channel_order = CL_RGBA;
+	format.image_channel_data_type = CL_UNSIGNED_INT8;
+	// imageA		
+	deviceImageA = clCreateImage2D(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
+		&format, width, height, rowPitch, image, &status);
+	assert(status == CL_SUCCESS);
+	// imageB
+	deviceImageB = clCreateImage2D(context, CL_MEM_READ_WRITE,
+		&format, width, height, 0, NULL, &status);
+	assert(status == CL_SUCCESS);
+	
+	/* Allocate buffer object for test output in global memory */
+	if (test) {
+		testVec = (float *)malloc(testSize);
+		testBuf = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
+			testSize, testVec, &status);
 		assert(status == CL_SUCCESS);
-
-		/* Get the list of OpenCL devices associated with context */
-		devices = context.getInfo<CL_CONTEXT_DEVICES> ();
-		assert(devices.size() > 0);
-		
-		/**
-		* Test device skills
-		*/
-		/* Test image support of OpenCL device */
-		if (!devices[0].getInfo<CL_DEVICE_IMAGE_SUPPORT>())
-			throw cl::Error(-666, "This OpenCL device does not support images");
-			
-		/* Test OpenGL sharing support of OpenCL device */
-		/*
-		#ifdef cl_khr_sharing
-			cout << "cl_khr_sharing supported" << std::endl;
-		#else
-			throw cl::Error(-667, "This OpenCL device does not support OpenGL sharing");
-		#endif
-		*/
-		
-		/**
-		* Create command queue
-		*/
-		commandQueue = cl::CommandQueue(context, devices[0], CL_QUEUE_PROFILING_ENABLE, &status);
-		assert(status == CL_SUCCESS);
-		
-		/**
-		* Allocate device memory
-		*/
-		/* Allocate image objects in constant memory */
-		cl::ImageFormat format = cl::ImageFormat(CL_RGBA, CL_UNSIGNED_INT8);
-		// imageA
-		deviceImageA = cl::Image2D(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
-			format, width, height, rowPitch, image, &status);
-		assert(status == CL_SUCCESS);
-		// imageB
-		deviceImageB = cl::Image2D(context, CL_MEM_READ_WRITE,
-			format, width, height, 0, NULL, &status);
-		assert(status == CL_SUCCESS);
-		
-		/* Allocate buffer object for test output in global memory */
-		if (test) {
-			testVec = (float *)malloc(testSize);
-			testBuf = cl::Buffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
-				testSize, testVec, &status);
-			assert(status == CL_SUCCESS);
-		}
-		
-		/**
-		* Create program and build kernel
-		*/
-		/* Read in the OpenCL kernel from the source file */
-		if (!kernels.open(kernelFile)) {
-			cerr << "Could not load CL source code" << endl;
-			return -1;
-		}
-		cl::Program::Sources sources(1, make_pair(kernels.source().data(),
-				kernels.source().size()));
-		program = cl::Program(context, sources);
-
-		/* Create a OpenCL program executable for all the devices specified */
-		program.build(devices);
-
-		/* Get a kernel object handle for the specified kernel */
-		kernel = cl::Kernel(program, "nextGeneration", &status);
-		assert(status == CL_SUCCESS);
-
-		/* Set kernel arguments */
-		kernel.setArg(0, deviceImageA);
-		kernel.setArg(1, deviceImageB);
-		kernel.setArg(2, rules);
-		if (test)
-			kernel.setArg(3, testBuf);
-		
-		return 0;
-	} catch (cl::Error err) {
-		cerr << "ERROR: " << err.what() << "(" << err.err() << ")" << endl;
-
-		/* If clBuildProgram failed get the build log for the first device */
-		if (!strcmp("clBuildProgram",err.what())) {
-			try {
-				cerr << "\nBuild log:\n";
-				cerr << program.getBuildInfo<CL_PROGRAM_BUILD_LOG>(devices[0]);;
-				cerr << "\n" << endl;
-			} catch (cl::Error err) {
-				cerr << "ERROR: " << err.what() << "(" << err.err() << ")" << endl;
-			}
-		}
-
+	}
+	
+	/**
+	* Load kernel file, build program and create kernel
+	*/
+	/* Read in the OpenCL kernel from the source file */
+	if (!kernels.open(kernelFile)) {
+		cerr << "Could not load CL source code" << endl;
 		return -1;
 	}
+	const char* source = kernels.source().c_str();
+	size_t sourceSize[] = {strlen(source)};		
+	
+	program = clCreateProgramWithSource(context, 1, &source,sourceSize, &status);
+
+	/* Create a OpenCL program executable for all the devices specified */
+	status = clBuildProgram(program, 1, devices, NULL, NULL, NULL);
+	if (status != CL_SUCCESS) {
+		/* if clBuildProgram failed get the build log for the first device */
+		char *build_log;
+		size_t ret_val_size;
+		
+		clGetProgramBuildInfo(program, devices[0],
+				CL_PROGRAM_BUILD_LOG, 0, NULL, &ret_val_size);
+		
+		build_log = new char[ret_val_size+1];
+		clGetProgramBuildInfo(program, devices[0],
+				CL_PROGRAM_BUILD_LOG, ret_val_size, build_log, NULL);
+		// to be carefully, terminate with \0
+		build_log[ret_val_size] = '\0';
+		
+		cerr << "\nBUILD LOG:\n" << build_log << endl;
+		
+		delete[] build_log;
+		return -1;
+	}
+
+	/* Get a kernel object handle for the specified kernel */
+	kernel = clCreateKernel(program, "nextGeneration", &status);
+	assert(status == CL_SUCCESS);
+
+	/* Set kernel arguments */
+	status |= clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&deviceImageA);
+	status |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&deviceImageB);
+	status |= clSetKernelArg(kernel, 2, sizeof(char), (void *)&rules);
+	if (test)
+		status |= clSetKernelArg(kernel, 3, sizeof(cl_mem), (void *)&testBuf);
+	assert(status == CL_SUCCESS);
+	
+	return 0;
 }
 
 int GameOfLife::nextGeneration(void) {
@@ -198,77 +224,86 @@ int GameOfLife::nextGeneration(void) {
 
 int GameOfLife::nextGenerationOpenCL(void) {
 	cl_int status = CL_SUCCESS;
-	cl::size_t<3> origin;
-	origin.push_back(0);
-	origin.push_back(0);
-	origin.push_back(0);
-	cl::size_t<3> region;
-	region.push_back(width);
-	region.push_back(height);
-	region.push_back(1);
-	cl::Event kernelEvent;
-	float executionTime;
+	
+	size_t globalThreads[2] = {512,512};
+    size_t localThreads[2] = {1,1};
+	size_t origin[3] = {0,0,0};
+	size_t region[3] = {width,height,1};
+	
+	/* Enqueue a kernel run call and wait for kernel to finish */
+	cl_event kernelEvent;
+	status = clEnqueueNDRangeKernel(commandQueue, kernel, 2, NULL,
+		globalThreads, localThreads, NULL, NULL, &kernelEvent);
+	assert(status == CL_SUCCESS);
+	clFinish(commandQueue);
 
-	try {
-		/* Enqueue a kernel run call and wait for kernel to finish */
-		commandQueue.enqueueNDRangeKernel(kernel, cl::NullRange,
-				cl::NDRange(width, height), cl::NullRange, NULL, &kernelEvent);		
-		commandQueue.finish();
-
-		executionTime = (kernelEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>() -
-						kernelEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>()) * 1.0e-6f;
-		cout << executionTime << endl;
-		
-		/* Update first device image */
-		/*
-		commandQueue.enqueueCopyImage(deviceImageB, deviceImageA,
-			origin, origin, region, NULL, NULL);
-		commandQueue.finish();
-		*/
-		/* Synchronous (i.e. blocking) read of results */
-		/*
-		commandQueue.enqueueReadImage(deviceImageA, CL_TRUE,
-			origin, region, 0, 0, image, NULL, NULL);
-		*/
-		/* second version to switch images */
-		
-		if (ab) {
-			kernel.setArg(0, deviceImageB);
-			kernel.setArg(1, deviceImageA);
-			commandQueue.enqueueReadImage(deviceImageB, CL_TRUE,
-				origin, region, rowPitch, 0, image, NULL, NULL);
-			ab = false;
-		} else {
-			kernel.setArg(0, deviceImageA);
-			kernel.setArg(1, deviceImageB);
-			commandQueue.enqueueReadImage(deviceImageA, CL_TRUE,
-				origin, region, rowPitch, 0, image, NULL, NULL);
-			ab = true;
-		}
-		
-		/* Output test vector */
-		if (test) {
-			commandQueue.enqueueReadBuffer(testBuf, CL_TRUE,
-				0, testSize, testVec, NULL, NULL);
-			
-			for (int i = 0; i < 20; i++)
-				cout << (i%10) << "|";
-			for (int i = 0; i < 60; i++) {
-				if (i%20==0)
-					cout << endl;
-				cout << testVec[i] << "|";
-			}
-			cout << endl;
-		}
-		
-		/* Single generation mode */
-		//pause();
-
-		return 0;
-	} catch (cl::Error err) {
-		cerr << "ERROR: " << err.what() << "(" << err.err() << ")" << endl;
-		return -1;
+	/* Output kernel execution time */
+	if (timerOutput==10) {
+		cl_ulong start, end;
+		status = clGetEventProfilingInfo(kernelEvent,
+			CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+		assert(status == CL_SUCCESS);
+		status = clGetEventProfilingInfo(kernelEvent,
+			CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+		assert(status == CL_SUCCESS);
+		cout << (end - start) * 1.0e-6f << endl;
+		timerOutput = 0;
+	} else {
+		timerOutput++;
 	}
+	clReleaseEvent(kernelEvent);
+	
+	/* Update first device image */
+	
+	status = clEnqueueCopyImage(commandQueue, deviceImageB, deviceImageA,
+		origin, origin, region, NULL, NULL, NULL);
+	assert(status == CL_SUCCESS);
+	
+	/* Synchronous (i.e. blocking) read of results */
+	
+	status = clEnqueueReadImage(commandQueue, deviceImageA, CL_TRUE,
+		origin, region, rowPitch, 0, image, NULL, NULL, NULL);
+	assert(status == CL_SUCCESS);
+	clFinish(commandQueue);
+	
+	/* second version to switch images */
+	/*
+	if (ab) {
+		status |= clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&deviceImageB);
+		status |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&deviceImageA);
+		status |= clEnqueueReadImage(commandQueue, deviceImageB, CL_TRUE,
+			origin, region, rowPitch, 0, image, NULL, NULL, NULL);
+		assert(status == CL_SUCCESS);
+		ab = false;
+	} else {
+		status |= clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&deviceImageA);
+		status |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&deviceImageB);
+		status |= clEnqueueReadImage(commandQueue, deviceImageA, CL_TRUE,
+			origin, region, rowPitch, 0, image, NULL, NULL, NULL);
+		assert(status == CL_SUCCESS);
+		ab = true;
+	}
+	*/
+	/* Output test vector */
+	if (test) {
+		status = clEnqueueReadBuffer(commandQueue, testBuf, CL_TRUE,
+			0, testSize, testVec, NULL, NULL, NULL);
+		assert(status == CL_SUCCESS);
+		
+		for (int i = 0; i < 20; i++)
+			cout << (i%10) << "|";
+		for (int i = 0; i < 60; i++) {
+			if (i%20==0)
+				cout << endl;
+			cout << testVec[i] << "|";
+		}
+		cout << endl;
+	}
+	
+	/* Single generation mode */
+	//pause();
+
+	return 0;
 }
 
 int GameOfLife::nextGenerationCPU(void) {
@@ -301,9 +336,6 @@ int GameOfLife::nextGenerationCPU(void) {
 
 	gettimeofday(&end, 0);
 	cout << (float)(end.tv_usec - start.tv_usec) / 1000.0f << endl;
-	//counter++;
-	//average += ((float)(end.tv_usec - start.tv_usec) / 1000.0f);
-	//cout << average / (float)counter << endl;
 	
 	memcpy(image, nextGenImage, imageSizeBytes);
 	return 0;
@@ -333,7 +365,24 @@ int GameOfLife::getNumberOfNeighbours(const int x, const int y) {
 
 int GameOfLife::freeMem() {
 	/* Releases OpenCL resources */
+	cl_int status = CL_SUCCESS;
 	if (useOpenCL) {
+		status = clReleaseKernel(kernel);
+		assert(status == CL_SUCCESS);
+		status = clReleaseProgram(program);
+		assert(status == CL_SUCCESS);
+		status = clReleaseMemObject(deviceImageA);
+		assert(status == CL_SUCCESS);
+		status = clReleaseMemObject(deviceImageA);
+		assert(status == CL_SUCCESS);
+		if (test) {
+			status = clReleaseMemObject(testBuf);
+			assert(status == CL_SUCCESS);
+		}
+		status = clReleaseCommandQueue(commandQueue);
+		assert(status == CL_SUCCESS);
+		status = clReleaseContext(context);
+		assert(status == CL_SUCCESS);
 	}
 
 	/* Release host resources */
@@ -341,6 +390,8 @@ int GameOfLife::freeMem() {
 		free(image);
 	if (nextGenImage)
 		free(nextGenImage);
-
+	if (devices)
+		free(devices);
+	
 	return 0;
 }

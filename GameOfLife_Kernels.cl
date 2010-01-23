@@ -17,7 +17,7 @@ inline void setState(int2 coord,uint4 state,
 	write_imageui(image, coord, state);
 }
 
-uchar getNumberOfNeighbours(float2 coord, int2 imageDim,
+uchar getNumberOfNeighbours(uint4 state, float2 coord, int2 imageDim,
 						    __read_only image2d_t image
 							) {
 	uchar counter = 0;
@@ -28,13 +28,13 @@ uchar getNumberOfNeighbours(float2 coord, int2 imageDim,
 		for (int k=-1; k<=1; k++) {
 			neighbourCoord = (float2)((float)coord.x+((float)i/(float)imageDim.x),
 									  (float)coord.y+((float)k/(float)imageDim.x));
-			if (!((i==0)&&(k==0))) {
-				neighbourState = getState(neighbourCoord, image);
-				if (neighbourState.x == ALIVE.x)
-					counter++;
+			neighbourState = getState(neighbourCoord, image);
+			if (neighbourState.x == ALIVE.x)
+				counter++;
 			}
-		}
 	}
+	
+	counter -= state.x/255;
 
 	return counter;
 }
@@ -46,14 +46,15 @@ void applyRules(uchar rules, uint4 state, uchar n, int2 coord,
 	case 0:
 		if (state.x == ALIVE.x) {
 			if ((n < 2) || (n > 3))
-				setState(coord, (uint4)(state.x-5, state.y-5, state.z-5, 1), image);
+				//setState(coord, (uint4)(state.x-5, state.y-5, state.z-5, 1), image);
+				setState(coord, DEAD, image);
 			else
 				setState(coord, ALIVE, image);
 		} else {
 			if (n == 3)
 				setState(coord, ALIVE, image);
-			else if (state.x > DEAD.x)
-				setState(coord, (uint4)(state.x-5, state.y-5, state.z-5, 1), image);
+			//else if (state.x > DEAD.x)
+				//setState(coord, (uint4)(state.x-5, state.y-5, state.z-5, 1), image);
 			else
 				setState(coord, DEAD, image);
 		}
@@ -81,11 +82,15 @@ __kernel void nextGeneration(
 	/* Get state of current cell */
 	uint4 state = getState(coordNormalized, imageA);
 	/* Get number of neighbours of current cell */
-	uchar numberOfNeighbours = getNumberOfNeighbours(coordNormalized, imageDim, imageA);
+	uchar numberOfNeighbours = 
+		getNumberOfNeighbours(state, coordNormalized, imageDim, imageA);
 	
 	/* Write test output */
 	//if (coord.x >= 95 && coord.x < 115 && coord.y >= 99 && coord.y <= 101)
-		//test[coord.x-95 + (coord.y-99)*20] = coordNormalized.x;
+		//test[coord.x-95 + (coord.y-99)*20] = coord.x;
+	
+	//test[0] = get_local_id(0);
+	//test[1] = get_local_id(1);
 	
 	/* Apply rules for next generation */
 	applyRules(rules, state, numberOfNeighbours, coord, imageB);

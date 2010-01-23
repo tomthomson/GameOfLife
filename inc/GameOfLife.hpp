@@ -1,9 +1,9 @@
 #ifndef GAMEOFLIFE_H_
 #define GAMEOFLIFE_H_
 
+#include <string.h>
 #include <cstdio>
 #include <iostream>
-#include <fstream>
 #include <cassert>       /* for assert() */
 #include <ctime>         /* for time() */
 #include <unistd.h>
@@ -11,12 +11,10 @@
 #include <cstdlib>       /* for srand() and rand() */
 #include "../inc/KernelFile.hpp"
 /* OpenCL definitions */
-#define __CL_ENABLE_EXCEPTIONS
-#define __NO_STD_VECTOR
-#include <CL/cl.hpp>
+#include <CL/cl.h>
 #pragma OPENCL EXTENSION cl_khr_gl_sharing : enable /* enable OpenGL sharing */
 #define cl_khr_gl_sharing
-#include <CL/cl_gl.h>    /* OpenCL/OpenGL interoperation */
+//#include <CL/cl_gl.h>    /* OpenCL/OpenGL interoperation */
 
 /* global definition of live and dead state */
 #define ALIVE 255
@@ -33,23 +31,21 @@ private:
 	bool                        ab;    /**< switch for image exchange */
 
 	bool                    paused;    /**< start/stop calculation of next generation */
-
-	cl::Context            context;    /**< CL context */
-	cl::vector<cl::Device> devices;    /**< CL device list */
-	cl::Image2D       deviceImageA;    /**< CL image object for first image */
-	cl::Image2D       deviceImageB;    /**< CL image object for second image */
+	
+	cl_context             context;    /**< CL context */
+	cl_device_id          *devices;    /**< CL device list */
+	cl_mem            deviceImageA;    /**< CL image object for first image */
+	cl_mem            deviceImageB;    /**< CL image object for second image */
 	size_t                rowPitch;    /**< CL row pitch for image objects */
-	cl::CommandQueue  commandQueue;    /**< CL command queue */
-	cl::Program            program;    /**< CL program  */
-	cl::Kernel              kernel;    /**< CL kernel */
+	cl_command_queue  commandQueue;    /**< CL command queue */
+	cl_program             program;    /**< CL program  */
+	cl_kernel               kernel;    /**< CL kernel */
 	
 	float                 *testVec;
-	cl::Buffer             testBuf;
+	cl_mem                 testBuf;
 	size_t                testSize;
 	bool                      test;
-
-	float average;
-	int counter;
+	int                timerOutput;
 
 public:
 	bool                 useOpenCL;    /**< CPU/OpenCL switch for calculating next generation*/
@@ -73,8 +69,7 @@ public:
 			if (test)
 				testSize = 60*sizeof(float);
 
-			average = 0.0f;
-			counter = 0;
+			timerOutput = 10;
 	}
 
 	/**
@@ -91,6 +86,7 @@ public:
 
 	/**
 	* Get the state of a cell.
+	* @param x and y coordinate of cell
 	* @return state
 	*/
 	unsigned char getState(int x, int y) {
@@ -167,12 +163,18 @@ private:
 	
 	/**
 	* Calculate the number of neighbours for a cell.
+	* @param x x coordinate of cell
+	* @param y y coordinate of cell
 	* @return number of neighbours
 	*/
 	int getNumberOfNeighbours(const int x, const int y);
 
 	/**
 	* Set the state of a cell.
+	* @param x x coordinate of cell
+	* @param y y coordinate of cell
+	* @param state new state of cell
+	* @param image update state in this image
 	*/
 	void setState(int x, int y, unsigned char state, unsigned char *image) {
 		image[4*x + (4*width*y)] = state;

@@ -8,8 +8,11 @@
 #include <GL/glut.h>
 #include <GL/gl.h>
 #endif
-#include <cstdio>
+
+#include <string.h>
 #include <cstdlib>
+#include <iostream>
+#include <string>
 #include "../inc/GameOfLifeMain.hpp"
 #include "../inc/GameOfLife.hpp"
 
@@ -198,6 +201,8 @@ int main(int argc, char **argv) {
 	initDisplay(argc, argv);
 	showControls();
 	mainLoopGL();
+	
+	//GameOfLife.nextGeneration();
 
 	/* Free host/device memory */
 	freeMem();
