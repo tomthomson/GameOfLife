@@ -40,10 +40,12 @@ private:
 	cl_command_queue  commandQueue;    /**< CL command queue */
 	cl_program             program;    /**< CL program  */
 	cl_kernel               kernel;    /**< CL kernel */
+	size_t        globalThreads[2];    /**< CL total number of work items for a kernel */
+	size_t         localThreads[2];    /**< CL number of work items per group */
 	
 	float                 *testVec;
 	cl_mem                 testBuf;
-	size_t                testSize;
+	size_t           testSizeBytes;
 	bool                      test;
 	int                timerOutput;
 
@@ -67,7 +69,7 @@ public:
 			
 			test = false;
 			if (test)
-				testSize = 60*sizeof(float);
+				testSizeBytes = 60*sizeof(float);
 
 			timerOutput = 10;
 	}

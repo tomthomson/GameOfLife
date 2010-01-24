@@ -27,8 +27,8 @@ int GameOfLife::setupHost() {
 }
 
 void GameOfLife::spawnPopulation() {
-	//spawnRandomPopulation();
-	spawnStaticPopulation();
+	spawnRandomPopulation();
+	//spawnStaticPopulation();
 }
 
 void GameOfLife::spawnRandomPopulation() {
@@ -156,12 +156,11 @@ int GameOfLife::setupDevice(void) {
 	deviceImageB = clCreateImage2D(context, CL_MEM_READ_WRITE,
 		&format, width, height, 0, NULL, &status);
 	assert(status == CL_SUCCESS);
-	
-	/* Allocate buffer object for test output in global memory */
+	// test
 	if (test) {
-		testVec = (float *)malloc(testSize);
+		testVec = (float *)malloc(testSizeBytes);
 		testBuf = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
-			testSize, testVec, &status);
+			testSizeBytes, testVec, &status);
 		assert(status == CL_SUCCESS);
 	}
 	
@@ -177,7 +176,7 @@ int GameOfLife::setupDevice(void) {
 	size_t sourceSize[] = {strlen(source)};		
 	
 	program = clCreateProgramWithSource(context, 1, &source,sourceSize, &status);
-
+	
 	/* Create a OpenCL program executable for all the devices specified */
 	status = clBuildProgram(program, 1, devices, NULL, NULL, NULL);
 	if (status != CL_SUCCESS) {
@@ -199,7 +198,7 @@ int GameOfLife::setupDevice(void) {
 		delete[] build_log;
 		return -1;
 	}
-
+	
 	/* Get a kernel object handle for the specified kernel */
 	kernel = clCreateKernel(program, "nextGeneration", &status);
 	assert(status == CL_SUCCESS);
@@ -211,6 +210,18 @@ int GameOfLife::setupDevice(void) {
 	if (test)
 		status |= clSetKernelArg(kernel, 3, sizeof(cl_mem), (void *)&testBuf);
 	assert(status == CL_SUCCESS);
+	
+	/* Set optimal values for local and global threads */
+	size_t maxWorkGroupSize;
+	clGetDeviceInfo(devices[0], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), 
+					(void*)&maxWorkGroupSize, NULL);
+	localThreads[0] = 24;
+	localThreads[1] = 16;
+	assert(maxWorkGroupSize >= localThreads[0] * localThreads[1]);
+	int r1 = width % localThreads[0];
+	int r2 = height % localThreads[1];
+	globalThreads[0] = (r1 == 0) ? width : width + localThreads[0] - r1;
+	globalThreads[1] = (r2 == 0) ? height : height + localThreads[1] - r2;
 	
 	return 0;
 }
@@ -224,9 +235,6 @@ int GameOfLife::nextGeneration(void) {
 
 int GameOfLife::nextGenerationOpenCL(void) {
 	cl_int status = CL_SUCCESS;
-	
-	size_t globalThreads[2] = {512,512};
-    size_t localThreads[2] = {1,1};
 	size_t origin[3] = {0,0,0};
 	size_t region[3] = {width,height,1};
 	
@@ -238,6 +246,7 @@ int GameOfLife::nextGenerationOpenCL(void) {
 	clFinish(commandQueue);
 
 	/* Output kernel execution time */
+	/*
 	if (timerOutput==10) {
 		cl_ulong start, end;
 		status = clGetEventProfilingInfo(kernelEvent,
@@ -251,23 +260,25 @@ int GameOfLife::nextGenerationOpenCL(void) {
 	} else {
 		timerOutput++;
 	}
+	*/
 	clReleaseEvent(kernelEvent);
 	
 	/* Update first device image */
-	
+	/* first way to switch images */
+	/*
 	status = clEnqueueCopyImage(commandQueue, deviceImageB, deviceImageA,
 		origin, origin, region, NULL, NULL, NULL);
 	assert(status == CL_SUCCESS);
-	
+	*/
 	/* Synchronous (i.e. blocking) read of results */
-	
+	/*
 	status = clEnqueueReadImage(commandQueue, deviceImageA, CL_TRUE,
 		origin, region, rowPitch, 0, image, NULL, NULL, NULL);
 	assert(status == CL_SUCCESS);
 	clFinish(commandQueue);
+	*/
+	/* second way to switch images */
 	
-	/* second version to switch images */
-	/*
 	if (ab) {
 		status |= clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&deviceImageB);
 		status |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&deviceImageA);
@@ -283,11 +294,11 @@ int GameOfLife::nextGenerationOpenCL(void) {
 		assert(status == CL_SUCCESS);
 		ab = true;
 	}
-	*/
+	
 	/* Output test vector */
 	if (test) {
 		status = clEnqueueReadBuffer(commandQueue, testBuf, CL_TRUE,
-			0, testSize, testVec, NULL, NULL, NULL);
+			0, testSizeBytes, testVec, NULL, NULL, NULL);
 		assert(status == CL_SUCCESS);
 		
 		for (int i = 0; i < 20; i++)

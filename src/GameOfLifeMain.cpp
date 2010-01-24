@@ -27,7 +27,8 @@ static unsigned char *globalImage;
 /* Show parameter help */
 void showHelp() {
 	cout << "Usage: GameOfLife [OPTION]... \n"
-		<< "\t-cl <0|1>\t implementation mode;\n\t\t\t 0 = use CPU, 1 = use OpenCL (default)\n"
+		<< "\t-cl <0|1>\t implementation mode:\n"
+		<< "\t\t\t 0 = use CPU, 1 = use OpenCL (default)\n"
 		<< endl;
 }
 

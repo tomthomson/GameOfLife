@@ -5,18 +5,19 @@
 * Rules for calculating next generation
 * 0:	Standard rules by John Conway
   ---------------------------------
-	Live cell:
-		Survives, if it has two or three live neighbours.
-		Dies, if it has one, two or more than thrre live neighbours.
 	Dead cell:
 		Becomes live cell, if it has exactly three live neighbours.
 		Stays dead, if it has not three live neighbours.
+	Live cell:
+		Survives, if it has two or three live neighbours.
+		Dies, if it has one, two or more than thrre live neighbours.
 	
 * 1:	Custom rule
   -----------------
-	Live cell:
 	Dead cell:
+	Live cell:
 */
+/* Rule definitions: nextState = rule[state * numberOfNeighbours] */
 #define RULES 0
 
 /** 
