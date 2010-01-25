@@ -69,51 +69,11 @@ void freeMem(void) {
 
 /* Display function */
 void display() {
-	glMatrixMode(GL_PROJECTION);    /* specify that we want to modify the projection matrix */
-	glLoadIdentity();               /* Sets the currant matrix to identity */
-	gluOrtho2D(0,WIDTH,0,HEIGHT);   /* Sets the clipping rectangle extends */
-
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	glMatrixMode(GL_MODELVIEW);     /* specify that we want to modify the modelview matrix */
-	glLoadIdentity();
-	glEnable(GL_BLEND);             /* enable blending */
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-	glPointSize(1);
-	unsigned char state;            /* state of the current cell */
-
-	glBegin(GL_POINTS);
-	for (int x=0; x<WIDTH; x++) {
-		for (int y=0; y<HEIGHT; y++) {
-			state = GameOfLife.getState(x,y);
-			if (state>0) {
-				glColor3f((float)state/(float)ALIVE,
-							(float)state/(float)ALIVE,
-							(float)state/(float)ALIVE);
-				glVertex3f(x,y,0);
-			}
-		}
-	}
-	glEnd();
-
-	glutSwapBuffers();              /* copy back-buffer into the front-buffer */
-	glutPostRedisplay();            /* marks the current window as needing to be redisplayed */
-	glFlush();                      /* draw OpenGL commands */
-
-	if(!GameOfLife.isPaused() && GameOfLife.nextGeneration()!=0) {
-		freeMem();
-		exit(0);
-	}
-}
-
-void display2() {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glDrawPixels(WIDTH, HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, globalImage);
 	glutSwapBuffers();
 	glutPostRedisplay();
 	glFlush();
-	
 	if(!GameOfLife.isPaused()) {
 		if (GameOfLife.nextGeneration()==0) {
 			memcpy(globalImage, GameOfLife.image, GameOfLife.imageSizeBytes);
@@ -161,8 +121,12 @@ void initGlut(int argc, char *argv[]) {
 	glutCreateWindow("Conway's Game of Life with OpenCL");
 	glClearColor(0.0, 0.0, 0.0, 1.0);
 
+	glClearDepth(1.0f);					// Depth Buffer Setup
+	glEnable(GL_DEPTH_TEST);			// Enables Depth Testing
+	glDepthFunc(GL_LEQUAL);				// The Type Of Depth Test To Do
+
 	/* Initialise callbacks */
-	glutDisplayFunc(display2);
+	glutDisplayFunc(display);
 	glutIdleFunc(idle);
 	glutKeyboardFunc(keyboard);
 }

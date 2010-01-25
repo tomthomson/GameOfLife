@@ -333,20 +333,25 @@ int GameOfLife::nextGenerationCPU(void) {
 			
 			if (state == ALIVE) {
 				if ((n < 2) || (n > 3))
-					setState(x, y, state-5, nextGenImage);
+					setState(x, y, DEAD, nextGenImage);
 				else
 					setState(x, y, ALIVE, nextGenImage);
 			} else {
 				if (n == 3)
 					setState(x, y, ALIVE, nextGenImage);
 				else
-					setState(x, y, state==0?0:state-5, nextGenImage);
+					setState(x, y, DEAD, nextGenImage);
 			}
 		}
 	}
 
 	gettimeofday(&end, 0);
-	cout << (float)(end.tv_usec - start.tv_usec) / 1000.0f << endl;
+
+	if (timerOutput==10) {
+		cout << (float)(end.tv_sec - start.tv_sec) * 1000.0f + (float)(end.tv_usec - start.tv_usec) / 1000.0f << endl;
+	} else {
+		timerOutput++;
+	}
 	
 	memcpy(image, nextGenImage, imageSizeBytes);
 	return 0;
