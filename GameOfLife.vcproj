@@ -79,7 +79,7 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
-				CommandLine="copy $(INPUTNAME)_Kernels.cl &quot;$(OUTDIR)&quot;\$(INPUTNAME)_Kernels.cl"
+				CommandLine="copy src&quot;\kernels.cl &quot;$(OUTDIR)&quot;\kernels.cl"
 			/>
 		</Configuration>
 		<Configuration
@@ -144,7 +144,7 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
-				CommandLine="copy $(INPUTNAME)_Kernels.cl &quot;$(OUTDIR)&quot;\$(INPUTNAME)_Kernels.cl"
+				CommandLine="copy src&quot;\kernels.cl &quot;$(OUTDIR)&quot;\kernels.cl"
 			/>
 		</Configuration>
 		<Configuration
@@ -208,7 +208,7 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
-				CommandLine="copy $(INPUTNAME)_Kernels.cl &quot;$(OUTDIR)&quot;\$(INPUTNAME)_Kernels.cl"
+				CommandLine="copy src&quot;\kernels.cl &quot;$(OUTDIR)&quot;\kernels.cl"
 			/>
 		</Configuration>
 		<Configuration
@@ -273,31 +273,13 @@
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
-				CommandLine="copy $(INPUTNAME)_Kernels.cl &quot;$(OUTDIR)&quot;\$(INPUTNAME)_Kernels.cl"
+				CommandLine="copy src&quot;\kernels.cl &quot;$(OUTDIR)&quot;\kernels.cl"
 			/>
 		</Configuration>
 	</Configurations>
 	<References>
 	</References>
 	<Files>
-		<Filter
-			Name="Source Files"
-			Filter="cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx"
-			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
-			>
-			<File
-				RelativePath=".\src\GameOfLife.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\src\GameOfLifeMain.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\src\KernelFile.cpp"
-				>
-			</File>
-		</Filter>
 		<Filter
 			Name="Header Files"
 			Filter="h;hpp;hxx;hm;inl;inc;xsd"
@@ -308,7 +290,7 @@
 				>
 			</File>
 			<File
-				RelativePath=".\inc\GameOfLifeMain.hpp"
+				RelativePath=".\inc\Main.hpp"
 				>
 			</File>
 			<File
@@ -317,11 +299,29 @@
 			</File>
 		</Filter>
 		<Filter
+			Name="Source Files"
+			Filter="cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx"
+			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
+			>
+			<File
+				RelativePath=".\src\GameOfLife.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\src\Main.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\src\KernelFile.cpp"
+				>
+			</File>
+		</Filter>
+		<Filter
 			Name="Kernel Files"
 			Filter="cl"
 			>
 			<File
-				RelativePath=".\GameOfLife_Kernels.cl"
+				RelativePath=".\src\kernels.cl"
 				>
 			</File>
 		</Filter>

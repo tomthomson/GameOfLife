@@ -34,10 +34,10 @@ include_directories(inc)
 ###
 # build
 ###
-add_executable(GameOfLife src/GameOfLifeMain.cpp src/GameOfLife.cpp src/KernelFile.cpp)
+add_executable(GameOfLife src/main.cpp src/GameOfLife.cpp src/KernelFile.cpp)
 target_link_libraries(GameOfLife ${OPENCL_LIBRARIES} ${GLUT_LIBRARY} ${OPENGL_LIBRARY})
 
 ###
 # copy OpenCL kernel file to build directory
 ###
-configure_file(GameOfLife_Kernels.cl . COPYONLY)
+configure_file(src/kernels.cl . COPYONLY)

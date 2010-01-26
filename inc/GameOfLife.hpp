@@ -12,9 +12,10 @@
 #include "../inc/KernelFile.hpp"
 /* OpenCL definitions */
 #include <CL/cl.h>
-#pragma OPENCL EXTENSION cl_khr_gl_sharing : enable /* enable OpenGL sharing */
-#define cl_khr_gl_sharing
-//#include <CL/cl_gl.h>    /* OpenCL/OpenGL interoperation */
+/* OpenCL/OpenGL interoperation */
+//#pragma OPENCL EXTENSION cl_khr_gl_sharing : enable /* enable OpenGL sharing */
+//#define cl_khr_gl_sharing
+//#include <CL/cl_gl.h>
 
 /* global definition of live and dead state */
 #define ALIVE 255
@@ -31,6 +32,9 @@ private:
 	bool                        ab;    /**< switch for image exchange */
 
 	bool                    paused;    /**< start/stop calculation of next generation */
+	bool                 singleGen;    /**< switch for single generation mode */
+	float            executionTime;    /**< execution time for calculation of 1 generation */
+	int                timerOutput;
 	
 	cl_context             context;    /**< CL context */
 	cl_device_id          *devices;    /**< CL device list */
@@ -47,7 +51,6 @@ private:
 	cl_mem                 testBuf;
 	size_t           testSizeBytes;
 	bool                      test;
-	int                timerOutput;
 
 public:
 	bool                 useOpenCL;    /**< CPU/OpenCL switch for calculating next generation*/
@@ -61,17 +64,15 @@ public:
 	*/
 	GameOfLife(unsigned char r, float p, int w, int h)
 			: rules(r), population(p), width(w), height(h),
-			image(NULL), nextGenImage(NULL), useOpenCL(true), paused(true)
+			image(NULL), nextGenImage(NULL), useOpenCL(true),
+			paused(true), singleGen(false), ab(true),
+			timerOutput(10)
 		{
-			imageSizeBytes = w*h*sizeof(char)*4;
 			rowPitch = w*sizeof(char)*4;
-			ab = true;
+			imageSizeBytes = h*rowPitch;
 			
 			test = false;
-			if (test)
-				testSizeBytes = 60*sizeof(float);
-
-			timerOutput = 10;
+			testSizeBytes = 60*sizeof(float);
 	}
 
 	/**
@@ -108,6 +109,14 @@ public:
 	bool isPaused() {
 		return paused;
 	}
+	
+	/**
+	* Get execution time of current generation.
+	* @return executionTime
+	*/
+	float getExecutionTime() {
+		return executionTime;
+	}
 
 	/**
 	* Start/stop calculation of next generation.
@@ -115,7 +124,17 @@ public:
 	void pause() {
 		paused = !paused;
 		std::cout << (paused ? "Stopping ":"Starting ")
-				<< "calculation of next generation." << std::endl;
+				  << "calculation of next generation." << std::endl;
+	}
+	
+	/**
+	* Switch single generation mode on/off.
+	*/
+	void singleGeneration() {
+		singleGen = !singleGen;
+		std::cout << "Single generation mode " 
+				  << (singleGen ? "on":"off")
+				  << "." << std::endl;
 	}
 
 private:

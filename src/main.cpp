@@ -1,27 +1,59 @@
-#ifdef linux
+#ifndef __GAMEOFLIFEMAIN_H_
+#define __GAMEOFLIFEMAIN_H_
+
 #define GL_GLEXT_PROTOTYPES
-#endif
-//#include <GL/glew.h>
+
 #if defined(__APPLE__) || defined(MACOSX)
-#include <GLUT/glut.h>
+	#include <GLUT/glut.h>
 #else
-#include <GL/glut.h>
-#include <GL/gl.h>
+	#include <GL/glut.h>
 #endif
 
+#include "GL/glext.h"
 #include <string.h>
 #include <cstdlib>
 #include <iostream>
 #include <string>
-#include "../inc/GameOfLifeMain.hpp"
+
 #include "../inc/GameOfLife.hpp"
+
+/** 
+* Rules for calculating next generation
+* 0:	Standard rules by John Conway
+  ---------------------------------
+	Dead cell:
+		Becomes live cell, if it has exactly three live neighbours.
+		Stays dead, if it has not three live neighbours.
+	Live cell:
+		Survives, if it has two or three live neighbours.
+		Dies, if it has one, two or more than thrre live neighbours.
+	
+* 1:	Custom rule
+  -----------------
+	Dead cell:
+	Live cell:
+*/
+/* Rule definitions: nextState = rule[state * numberOfNeighbours] */
+#define RULES 0
+
+/** 
+* Chance to create a new individual
+* when using random starting population
+*/
+#define POPULATION 0.04
+
+/**
+* Width and height of the Game of Life board
+*/
+#define WIDTH 512
+#define HEIGHT 512
 
 using namespace std;
 
 /* Create an instance of GameOfLife */
 GameOfLife GameOfLife(RULES, POPULATION, WIDTH, HEIGHT);
 
-/* Global variables */
+/* Global variables for OpenGL */
 static unsigned char *globalImage;
 
 /* Show parameter help */
@@ -57,9 +89,10 @@ bool readFlags(int argc, char *argv[]) {
 }
 
 void showControls() {
-	std::cout << "Controls:\n";
-	std::cout << "space \t start/stop calculation of next generation\n";
-	std::cout << "q/esc \t quit\n" << endl;
+	cout << "Controls:\n";
+	cout << "space \t start/stop calculation of next generation\n";
+	cout << "  g   \t switch single generation mode on/off\n";
+	cout << "q/esc \t quit\n" << endl;
 }
 
 /* Free host/device memory */
@@ -70,19 +103,27 @@ void freeMem(void) {
 /* Display function */
 void display() {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	
 	glDrawPixels(WIDTH, HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, globalImage);
+	
 	glutSwapBuffers();
 	glutPostRedisplay();
 	glFlush();
+	
+	/* Calculate next generation if not paused */
 	if(!GameOfLife.isPaused()) {
 		if (GameOfLife.nextGeneration()==0) {
 			memcpy(globalImage, GameOfLife.image, GameOfLife.imageSizeBytes);
+			/* Append execution time of one generation to window title */
+			char title[64];
+			sprintf(title, "Conway's Game of Life with OpenCL @ %f ms/generation",
+							GameOfLife.getExecutionTime());
+			glutSetWindowTitle(title);
 		} else {
 			freeMem();
 			exit(0);
 		}
 	}
-	
 }
 
 /* Idle function */
@@ -97,7 +138,11 @@ void keyboard(unsigned char key, int mouseX, int mouseY) {
 		case ' ':
 			GameOfLife.pause();
 			break;
-			/* Pressing escape or q exits */
+		/* Pressing space starts/stops calculation of next generation */
+		case 'g':
+			GameOfLife.singleGeneration();
+			break;
+		/* Pressing escape or q exits */
 		case 27:
 		case 'q':
 		case 'Q':
@@ -116,7 +161,7 @@ void initGlut(int argc, char *argv[]) {
 						GLUT_DEPTH  |	// depth buffer available
 						GLUT_RGBA   |	// color buffer with reg, green, blue, alpha
 						GLUT_ALPHA);
-	glutInitWindowSize(WIDTH, HEIGHT);
+	glutInitWindowSize(WIDTH, HEIGHT+100);
 	glutInitWindowPosition(100, 100);
 	glutCreateWindow("Conway's Game of Life with OpenCL");
 	glClearColor(0.0, 0.0, 0.0, 1.0);
@@ -148,6 +193,9 @@ void mainLoopGL(void) {
 }
 
 int main(int argc, char **argv) {
+	cout << "----------------------" << endl;
+	cout << "---- Game of Life ----" << endl;
+	cout << "----------------------" << endl;
 	/* read command line arguments */
 	if (!readFlags(argc, argv)) {
 		showHelp();
@@ -173,3 +221,5 @@ int main(int argc, char **argv) {
 	freeMem();
 	return EXIT_SUCCESS;
 }
+
+#endif

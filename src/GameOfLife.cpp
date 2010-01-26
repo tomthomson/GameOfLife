@@ -60,7 +60,7 @@ void GameOfLife::spawnStaticPopulation() {
 
 int GameOfLife::setupDevice(void) {
 	cl_int status = CL_SUCCESS;
-	const char* kernelFile = "GameOfLife_Kernels.cl";
+	const char* kernelFile = "kernels.cl";
 	KernelFile kernels;
 	
 	/*
@@ -235,8 +235,6 @@ int GameOfLife::nextGeneration(void) {
 
 int GameOfLife::nextGenerationOpenCL(void) {
 	cl_int status = CL_SUCCESS;
-	size_t origin[3] = {0,0,0};
-	size_t region[3] = {width,height,1};
 	
 	/* Enqueue a kernel run call and wait for kernel to finish */
 	cl_event kernelEvent;
@@ -245,40 +243,28 @@ int GameOfLife::nextGenerationOpenCL(void) {
 	assert(status == CL_SUCCESS);
 	clFinish(commandQueue);
 
-	/* Output kernel execution time */
-	/*
+	/* Calculate kernel execution time */
 	if (timerOutput==10) {
 		cl_ulong start, end;
-		status = clGetEventProfilingInfo(kernelEvent,
+		
+		status |= clGetEventProfilingInfo(kernelEvent,
 			CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-		assert(status == CL_SUCCESS);
-		status = clGetEventProfilingInfo(kernelEvent,
+		
+		status |= clGetEventProfilingInfo(kernelEvent,
 			CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
 		assert(status == CL_SUCCESS);
-		cout << (end - start) * 1.0e-6f << endl;
+		
+		executionTime = (end - start) * 1.0e-6f;
 		timerOutput = 0;
 	} else {
 		timerOutput++;
 	}
-	*/
+	
 	clReleaseEvent(kernelEvent);
 	
 	/* Update first device image */
-	/* first way to switch images */
-	/*
-	status = clEnqueueCopyImage(commandQueue, deviceImageB, deviceImageA,
-		origin, origin, region, NULL, NULL, NULL);
-	assert(status == CL_SUCCESS);
-	*/
-	/* Synchronous (i.e. blocking) read of results */
-	/*
-	status = clEnqueueReadImage(commandQueue, deviceImageA, CL_TRUE,
-		origin, region, rowPitch, 0, image, NULL, NULL, NULL);
-	assert(status == CL_SUCCESS);
-	clFinish(commandQueue);
-	*/
-	/* second way to switch images */
-	
+	size_t origin[3] = {0,0,0};
+	size_t region[3] = {width,height,1};
 	if (ab) {
 		status |= clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&deviceImageB);
 		status |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&deviceImageA);
@@ -312,7 +298,8 @@ int GameOfLife::nextGenerationOpenCL(void) {
 	}
 	
 	/* Single generation mode */
-	//pause();
+	if (singleGen)
+		pause();
 
 	return 0;
 }
@@ -320,12 +307,13 @@ int GameOfLife::nextGenerationOpenCL(void) {
 int GameOfLife::nextGenerationCPU(void) {
 	int n;
 	unsigned char state;
-
 	timeval start;
     timeval end;
 
+	/* Start timer */
 	gettimeofday(&start, 0);
 	
+	/* Calculate next generation for each pixel */
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++) {
 			n = getNumberOfNeighbours(x, y);
@@ -344,16 +332,25 @@ int GameOfLife::nextGenerationCPU(void) {
 			}
 		}
 	}
-
+	
+	/* Stop timer */
 	gettimeofday(&end, 0);
-
+	
+	/* Calculate kernel execution time */
 	if (timerOutput==10) {
-		cout << (float)(end.tv_sec - start.tv_sec) * 1000.0f + (float)(end.tv_usec - start.tv_usec) / 1000.0f << endl;
+		executionTime = (float)(end.tv_sec - start.tv_sec) * 1000.0f
+						+ (float)(end.tv_usec - start.tv_usec) / 1000.0f;
 	} else {
 		timerOutput++;
 	}
 	
+	/* Switch images */
 	memcpy(image, nextGenImage, imageSizeBytes);
+	
+	/* Single generation mode */
+	if (singleGen)
+		pause();
+	
 	return 0;
 }
 
