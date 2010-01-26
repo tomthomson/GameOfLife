@@ -307,11 +307,22 @@ int GameOfLife::nextGenerationOpenCL(void) {
 int GameOfLife::nextGenerationCPU(void) {
 	int n;
 	unsigned char state;
-	timeval start;
-    timeval end;
-
+	#ifdef WIN32
+		LARGE_INTEGER frequency;	/* ticks per second */
+		LARGE_INTEGER start;
+		LARGE_INTEGER end;
+	#else
+		timeval start;
+		timeval end;
+	#endif
+	
 	/* Start timer */
-	gettimeofday(&start, 0);
+	#ifdef WIN32
+		QueryPerformanceFrequency(&frequency);
+		QueryPerformanceCounter(&start);
+	#else
+		gettimeofday(&start, NULL);
+	#endif
 	
 	/* Calculate next generation for each pixel */
 	for (int x = 0; x < width; x++) {
@@ -334,12 +345,21 @@ int GameOfLife::nextGenerationCPU(void) {
 	}
 	
 	/* Stop timer */
-	gettimeofday(&end, 0);
+	#ifdef WIN32
+		QueryPerformanceCounter(&end);
+	#else
+		gettimeofday(&end, NULL);
+	#endif
 	
-	/* Calculate kernel execution time */
+	/* Calculate execution time for one generation */
 	if (timerOutput==10) {
-		executionTime = (float)(end.tv_sec - start.tv_sec) * 1000.0f
-						+ (float)(end.tv_usec - start.tv_usec) / 1000.0f;
+		#ifdef WIN32
+			executionTime = endCount.QuadPart * (1000.0f / frequency.QuadPart)
+							+ startCount.QuadPart * (1000.0f / frequency.QuadPart);
+		#else
+			executionTime = (float)(end.tv_sec - start.tv_sec) * 1000.0f
+							+ (float)(end.tv_usec - start.tv_usec) / 1000.0f;
+		#endif
 	} else {
 		timerOutput++;
 	}

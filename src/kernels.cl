@@ -71,7 +71,7 @@ void applyRules(__private uchar rules,
 }
 
 __kernel
-__attribute__((reqd_work_group_size(24, 16, 1)))
+__attribute__( (reqd_work_group_size(24, 16, 1)) )
 				void nextGeneration(
 				__read_only image2d_t imageA,
 				__write_only image2d_t imageB,

@@ -4,18 +4,21 @@
 #include <string.h>
 #include <cstdio>
 #include <iostream>
-#include <cassert>       /* for assert() */
-#include <ctime>         /* for time() */
-#include <unistd.h>
-#include <sys/time.h>
-#include <cstdlib>       /* for srand() and rand() */
-#include "../inc/KernelFile.hpp"
-/* OpenCL definitions */
-#include <CL/cl.h>
-/* OpenCL/OpenGL interoperation */
+#include <cassert>					/* for assert() */
+#include <ctime>					/* for time() */
+#include <cstdlib>					/* for srand() and rand() */
+#ifdef WIN32					// Windows system specific
+	#include <windows.h>			/* for QueryPerformanceCounter */
+#else							// Unix based system specific
+	#include <sys/time.h>			/* for gettimeofday() */
+#endif
+
+#include <CL/cl.h>					/* OpenCL definitions */
 //#pragma OPENCL EXTENSION cl_khr_gl_sharing : enable /* enable OpenGL sharing */
 //#define cl_khr_gl_sharing
-//#include <CL/cl_gl.h>
+//#include <CL/cl_gl.h>				/* OpenCL/OpenGL interoperation */
+
+#include "../inc/KernelFile.hpp"	/* for reading OpenCL kernel files */
 
 /* global definition of live and dead state */
 #define ALIVE 255
