@@ -12,12 +12,7 @@
 #else							// Unix based system specific
 	#include <sys/time.h>			/* for gettimeofday() */
 #endif
-
 #include <CL/cl.h>					/* OpenCL definitions */
-//#pragma OPENCL EXTENSION cl_khr_gl_sharing : enable /* enable OpenGL sharing */
-//#define cl_khr_gl_sharing
-//#include <CL/cl_gl.h>				/* OpenCL/OpenGL interoperation */
-
 #include "../inc/KernelFile.hpp"	/* for reading OpenCL kernel files */
 
 /* global definition of live and dead state */
@@ -31,9 +26,12 @@ private:
 	                                        using random starting population */
 	int                      width;    /**< width of image */
 	int                     height;    /**< height of image */
+	unsigned char           *image;    /**< image on the host for current generation */
 	unsigned char    *nextGenImage;    /**< temp-image for CPU calculation */
+	size_t          imageSizeBytes;    /**< size of image in bytes */
 	bool                        ab;    /**< switch for image exchange */
 
+	bool                 useOpenCL;    /**< CPU/OpenCL switch for calculating next generation*/
 	bool                    paused;    /**< start/stop calculation of next generation */
 	bool                 singleGen;    /**< switch for single generation mode */
 	float            executionTime;    /**< execution time for calculation of 1 generation */
@@ -54,11 +52,6 @@ private:
 	cl_mem                 testBuf;
 	size_t           testSizeBytes;
 	bool                      test;
-
-public:
-	bool                 useOpenCL;    /**< CPU/OpenCL switch for calculating next generation*/
-	unsigned char           *image;    /**< image on the host that is displayed with OpenGL */
-	size_t          imageSizeBytes;    /**< size of image in bytes */
 
 public:
 	/** 
@@ -88,16 +81,7 @@ public:
 	* Calculate next generation.
 	* @return 0 on success and -1 on failure
 	*/
-	int nextGeneration();
-
-	/**
-	* Get the state of a cell.
-	* @param x and y coordinate of cell
-	* @return state
-	*/
-	unsigned char getState(int x, int y) {
-		return (image[4*x + (4*width*y)]);
-	}
+	int nextGeneration(unsigned char* bufferImage);
 
 	/**
 	* Free memory.
@@ -112,6 +96,25 @@ public:
 	bool isPaused() {
 		return paused;
 	}
+
+	/**
+	* Start/stop calculation of next generation.
+	*/
+	void pause() {
+		paused = !paused;
+		std::cout << (paused ? "Stopping ":"Starting ")
+				  << "calculation of next generation." << std::endl;
+	}
+
+	/**
+	* Switch single generation mode on/off.
+	*/
+	void singleGeneration() {
+		singleGen = !singleGen;
+		std::cout << "Single generation mode "
+				  << (singleGen ? "on":"off")
+				  << "." << std::endl;
+	}
 	
 	/**
 	* Get execution time of current generation.
@@ -122,22 +125,19 @@ public:
 	}
 
 	/**
-	* Start/stop calculation of next generation.
+	* Get image of current generation.
+	* @return image
 	*/
-	void pause() {
-		paused = !paused;
-		std::cout << (paused ? "Stopping ":"Starting ")
-				  << "calculation of next generation." << std::endl;
+	unsigned char * getImage() {
+		return image;
 	}
-	
+
 	/**
-	* Switch single generation mode on/off.
+	* Set state if OpenCL is used for calculating next generation
+	* @param state state of OpenCL usage
 	*/
-	void singleGeneration() {
-		singleGen = !singleGen;
-		std::cout << "Single generation mode " 
-				  << (singleGen ? "on":"off")
-				  << "." << std::endl;
+	void setOpenCL(bool state) {
+		useOpenCL = state;
 	}
 
 private:
@@ -177,13 +177,13 @@ private:
 	* Calculate next generation with OpenCL.
 	* @return 0 on success and -1 on failure
 	*/
-	int nextGenerationOpenCL();
+	int nextGenerationOpenCL(unsigned char* bufferImage);
 	
 	/**
 	* Calculate next generation with CPU.
 	* @return 0 on success and -1 on failure
 	*/
-	int nextGenerationCPU();
+	int nextGenerationCPU(unsigned char* bufferImage);
 	
 	/**
 	* Calculate the number of neighbours for a cell.
@@ -205,6 +205,15 @@ private:
 		image[(4*x+1) + (4*width*y)] = state;
 		image[(4*x+2) + (4*width*y)] = state;
 		image[(4*x+3) + (4*width*y)] = 1;
+	}
+
+	/**
+	* Get the state of a cell.
+	* @param x and y coordinate of cell
+	* @return state
+	*/
+	unsigned char getState(int x, int y) {
+		return (image[4*x + (4*width*y)]);
 	}
 };
 

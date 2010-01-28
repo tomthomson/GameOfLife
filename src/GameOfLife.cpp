@@ -226,14 +226,14 @@ int GameOfLife::setupDevice(void) {
 	return 0;
 }
 
-int GameOfLife::nextGeneration(void) {
+int GameOfLife::nextGeneration(unsigned char* bufferImage) {
 	if (useOpenCL)
-		return nextGenerationOpenCL();
+		return nextGenerationOpenCL(bufferImage);
 	else
-		return nextGenerationCPU();
+		return nextGenerationCPU(bufferImage);
 }
 
-int GameOfLife::nextGenerationOpenCL(void) {
+int GameOfLife::nextGenerationOpenCL(unsigned char* bufferImage) {
 	cl_int status = CL_SUCCESS;
 	
 	/* Enqueue a kernel run call and wait for kernel to finish */
@@ -262,21 +262,21 @@ int GameOfLife::nextGenerationOpenCL(void) {
 	
 	clReleaseEvent(kernelEvent);
 	
-	/* Update first device image */
+	/* Exchange images for current and next generation */
 	size_t origin[3] = {0,0,0};
 	size_t region[3] = {width,height,1};
 	if (ab) {
 		status |= clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&deviceImageB);
 		status |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&deviceImageA);
 		status |= clEnqueueReadImage(commandQueue, deviceImageB, CL_TRUE,
-			origin, region, rowPitch, 0, image, NULL, NULL, NULL);
+			origin, region, rowPitch, 0, bufferImage, NULL, NULL, NULL);
 		assert(status == CL_SUCCESS);
 		ab = false;
 	} else {
 		status |= clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&deviceImageA);
 		status |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&deviceImageB);
 		status |= clEnqueueReadImage(commandQueue, deviceImageA, CL_TRUE,
-			origin, region, rowPitch, 0, image, NULL, NULL, NULL);
+			origin, region, rowPitch, 0, bufferImage, NULL, NULL, NULL);
 		assert(status == CL_SUCCESS);
 		ab = true;
 	}
@@ -304,7 +304,7 @@ int GameOfLife::nextGenerationOpenCL(void) {
 	return 0;
 }
 
-int GameOfLife::nextGenerationCPU(void) {
+int GameOfLife::nextGenerationCPU(unsigned char* bufferImage) {
 	int n;
 	unsigned char state;
 	#ifdef WIN32
@@ -364,8 +364,11 @@ int GameOfLife::nextGenerationCPU(void) {
 		timerOutput++;
 	}
 	
-	/* Switch images */
+	/* Update images for current and next generation */
 	memcpy(image, nextGenImage, imageSizeBytes);
+
+	/* Update image directly on the mapped buffer */
+	memcpy(bufferImage, nextGenImage, imageSizeBytes);
 	
 	/* Single generation mode */
 	if (singleGen)

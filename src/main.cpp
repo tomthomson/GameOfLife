@@ -70,7 +70,6 @@ using namespace std;
 GameOfLife GameOfLife(RULES, POPULATION, WIDTH, HEIGHT);
 
 /* Global variables for OpenGL */
-static unsigned char *globalImage;
 GLuint glPBO, glTex, glShader;
 void *font = GLUT_BITMAP_8_BY_13;
 bool mouseLeftDown;
@@ -79,7 +78,7 @@ float mouseX, mouseY;
 float cameraAngleX;
 float cameraAngleY;
 float cameraDistance;
-static const char *shader_code =	/* glShader for displaying floating-point texture */
+static const char *shaderCode =		/* glShader for displaying floating-point texture */
 			"!!ARBfp1.0\n"
 			"TEX result.color, fragment.texcoord, texture[0], 2D; \n"
 			"END";
@@ -98,7 +97,7 @@ bool readFlags(int argc, char *argv[]) {
 		if (strcmp(argv[1], "-cl") == 0) {
 			switch (argv[2][0]) {
 			case '0':
-				GameOfLife.useOpenCL = false;
+				GameOfLife.setOpenCL(false);
 				break;
 			case '1':
 				break;
@@ -137,7 +136,7 @@ void freeMem(void) {
 /*
  * GLUT support functions
  */
-/* Write 2d text using GLUT
+/* Write 2D text using GLUT
  * The projection matrix must be set to orthogonal before calling this function. */
 void drawString(const char *str, int x, int y, float color[4], void *font) {
 	glPushAttrib(GL_LIGHTING_BIT | GL_CURRENT_BIT); // lighting and color mask
@@ -156,82 +155,27 @@ void drawString(const char *str, int x, int y, float color[4], void *font) {
 	glPopAttrib();
 }
 
-/* Show infos about calculations */
-void showInfo() {
-	/* Backup current model-view matrix */
-	glPushMatrix();						// save current modelview matrix
-	glLoadIdentity();					// reset modelview matrix
-
-	/* Set to 2D orthogonal projection */
-	glMatrixMode(GL_PROJECTION);		// switch to projection matrix
-	glPushMatrix();						// save current projection matrix
-	glLoadIdentity();					// reset projection matrix
-	gluOrtho2D(0, 400, 0, 300);			// set to orthogonal projection
-
-	float color[4] = {1, 1, 1, 1};
-
-	stringstream ss;
-	/*
-	ss << "VBO: " << (vboUsed ? "on" : "off") << std::ends;  // add 0(ends) at the end
-	drawString(ss.str().c_str(), 1, 286, color, font);
-	ss.str(""); // clear buffer
-	*/
-	/*
-	ss << std::fixed << std::setprecision(3);
-	ss << "Updating Time: " << updateTime << " ms" << std::ends;
-	drawString(ss.str().c_str(), 1, 272, color, font);
-	ss.str("");
-
-	ss << "Drawing Time: " << drawTime << " ms" << std::ends;
-	drawString(ss.str().c_str(), 1, 258, color, font);
-	ss.str("");
-	*/
-	ss << "Press SPACE key to toggle VBO on/off." << std::ends;
-	drawString(ss.str().c_str(), 1, 280, color, font);
-
-	/* Unset floating format */
-	ss << std::resetiosflags(std::ios_base::fixed | std::ios_base::floatfield);
-
-	/* Restore projection matrix */
-	glPopMatrix();						// restore to previous projection matrix
-
-	/* Restore modelview matrix */
-	glMatrixMode(GL_MODELVIEW);			// switch to modelview matrix
-	glPopMatrix();						// restore to previous modelview matrix
-}
-
-void updateTitle() {
-	/* Append execution time of one generation to window title */
-	char title[64];
-	sprintf(title, "Conway's Game of Life with OpenCL @ %f ms/generation",
-					GameOfLife.getExecutionTime());
-	glutSetWindowTitle(title);
-}
-
 /*
  * GLUT callback functions
  */
 /* Display function */
 void display() {
-	
 	/*
 	 * Calculate next generation if game is not paused
 	 */
 	if(!GameOfLife.isPaused()) {
-		if (GameOfLife.nextGeneration()==0) {
-			GLubyte* ptr =
+		GLubyte* bufferImage =
 				(GLubyte *)glMapBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, GL_WRITE_ONLY_ARB);
+
+		if (bufferImage) {
+		  	/* Write image of next generation directly on the mapped buffer */
+			int state = GameOfLife.nextGeneration(bufferImage);
 			
-			if(ptr) {
-				/* Update data directly on the mapped buffer */
-				memcpy(ptr, GameOfLife.image, GameOfLife.imageSizeBytes);
-				/* Release the mapped buffer */
-				glUnmapBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB);
-			}
+			/* Release the mapped buffer */
+			glUnmapBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB);
 			
-		} else {
-			freeMem();
-			exit(0);
+			if (state != 0)
+				exit(0);
 		}
 	}
 	
@@ -245,11 +189,10 @@ void display() {
     glPushMatrix();
 	glLoadIdentity();					// reset modelview matrix
 	
-	/* Transform camera */	
-	
-    glTranslatef(0, 0, cameraDistance);
-    glRotatef(cameraAngleX, 1, 0, 0);	// pitch
-    glRotatef(cameraAngleY, 0, 1, 0);	// heading
+	/* Transform camera */
+	glScalef(cameraDistance,cameraDistance,1);	// zoom
+    glRotatef(cameraAngleX, 1, 0, 0);			// pitch
+    glRotatef(cameraAngleY, 0, 1, 0);			// heading
 	
 	/* Load texture from PBO */
 	glBindTexture(GL_TEXTURE_2D, glTex);
@@ -272,14 +215,16 @@ void display() {
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glDisable(GL_FRAGMENT_PROGRAM_ARB);
 	
-	/* Draw infos */
-	//showInfo();
-	//updateTitle();
-	
 	glPopMatrix();
 	
 	glutSwapBuffers();
 	glutReportErrors();
+
+	/* Append execution time of one generation to window title */
+	char title[64];
+	sprintf(title, "Conway's Game of Life with OpenCL @ %f ms/generation",
+					GameOfLife.getExecutionTime());
+	glutSetWindowTitle(title);
 }
 
 /* Idle function */
@@ -311,13 +256,13 @@ void keyboard(unsigned char key, int mouseX, int mouseY) {
 /* Reshape function */
 void reshape(int w, int h) {
 	glViewport(0, 0, w, h);
-
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glOrtho(0.0, 1.0, 0.0, 1.0, 0.0, 1.0);
+	
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glOrtho(0.0, 1.0, 0.0, 1.0, 0.0, 1.0);
 }
 
 /* Mouse function */
@@ -351,7 +296,7 @@ void mouseMotion(int x, int y) {
 		mouseY = y;
 	}
 	if(mouseRightDown) {
-		cameraDistance += (y - mouseY) * 0.2f;
+		cameraDistance += (y - mouseY) * 0.1f;
 		mouseY = y;
 	}
 }
@@ -419,11 +364,9 @@ void initOpenGL(void) {
 	
 	/* Enable features */
 	glEnable(GL_DEPTH_TEST);			// enables depth testing
-    //glEnable(GL_LIGHTING);
-    glEnable(GL_TEXTURE_2D);
-    //glEnable(GL_CULL_FACE);
+	glEnable(GL_TEXTURE_2D);
 	
-	glClearColor(0.0, 0.0, 0.0, 1.0);	// background color
+	glClearColor(0.2, 0.2, 0.2, 1.0);	// background color
 	glClearStencil(0);					// clear stencil buffer
 	glClearDepth(1.0f);					// depth buffer setup: 0 is near, 1 is far
 	glDepthFunc(GL_LEQUAL);				// type of depth test
@@ -432,22 +375,22 @@ void initOpenGL(void) {
 }
 
 GLuint compileASMShader(GLenum program_type, const char *code) {
-    GLuint programID;
-    glGenProgramsARB(1, &programID);
-    glBindProgramARB(program_type, programID);
-    glProgramStringARB(program_type, GL_PROGRAM_FORMAT_ASCII_ARB,
+	GLuint programID;
+	glGenProgramsARB(1, &programID);
+	glBindProgramARB(program_type, programID);
+	glProgramStringARB(program_type, GL_PROGRAM_FORMAT_ASCII_ARB,
 						(GLsizei) strlen(code), (GLubyte *) code);
-
-    GLint error_pos;
-    glGetIntegerv(GL_PROGRAM_ERROR_POSITION_ARB, &error_pos);
-    if (error_pos != -1) {
-        const GLubyte *error_string;
-        error_string = glGetString(GL_PROGRAM_ERROR_STRING_ARB);
-        cerr << "Program error at position: " << (int)error_pos << endl;
+	
+	GLint error_pos;
+	glGetIntegerv(GL_PROGRAM_ERROR_POSITION_ARB, &error_pos);
+	if (error_pos != -1) {
+		const GLubyte *error_string;
+		error_string = glGetString(GL_PROGRAM_ERROR_STRING_ARB);
+		cerr << "OpenGL program error at position: " << (int)error_pos << endl;
 		cerr << error_string << endl;
-        return 0;
-    }
-    return programID;
+		return 0;
+	}
+	return programID;
 }
 
 /* Initialise OpenGL Pixel Buffer Objects */
@@ -459,7 +402,7 @@ void initOpenGLBuffers() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, WIDTH, HEIGHT,
-					0, GL_RGBA, GL_UNSIGNED_BYTE, globalImage);
+					0, GL_RGBA, GL_UNSIGNED_BYTE, GameOfLife.getImage());
 	
 	/* Generate a new buffer object */
 	glGenBuffers(1, &glPBO);
@@ -467,15 +410,16 @@ void initOpenGLBuffers() {
 	glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, glPBO);
 	/* Copy pixel data to the buffer object */
 	glBufferData(GL_PIXEL_UNPACK_BUFFER_ARB, WIDTH * HEIGHT * 4,
-					globalImage, GL_STREAM_DRAW_ARB);
+					GameOfLife.getImage(), GL_STREAM_DRAW_ARB);
 	
 	/* Load shader program */
-    glShader = compileASMShader(GL_FRAGMENT_PROGRAM_ARB, shader_code);
+	glShader = compileASMShader(GL_FRAGMENT_PROGRAM_ARB, shaderCode);
 }
 
 /* Initalise display */
 void initDisplay(int argc, char *argv[]) {
 	mouseLeftDown = mouseRightDown = false;
+	cameraDistance = 1.0f;
 	initGLUT(argc, argv);
 	initOpenGL();
 	initOpenGLBuffers();
@@ -484,8 +428,8 @@ void initDisplay(int argc, char *argv[]) {
 /* OpenGL main loop */
 void mainLoopGL(void) {
 	/* last GLUT call (LOOP)
-     * window will be shown and display callback is triggered by events
-     * NOTE: this call never returns to main() resp. mainLoopGL()
+	 * window will be shown and display callback is triggered by events
+	 * NOTE: this call never returns to main() resp. mainLoopGL()
 	 */
 	glutMainLoop();
 }
@@ -516,10 +460,6 @@ int main(int argc, char **argv) {
 	/* Setup host/device memory, starting population and OpenCL */
 	if(GameOfLife.setup()!=0)
 		return -1;
-
-	/* Allocate and update image for OpenGL display */
-	globalImage = (unsigned char*) malloc (GameOfLife.imageSizeBytes);
-	memcpy(globalImage, GameOfLife.image, GameOfLife.imageSizeBytes);
 	
 	/* Show controls for Game of Life in console */
 	showControls();
@@ -528,8 +468,6 @@ int main(int argc, char **argv) {
 	initDisplay(argc, argv);
 	/* Display GameOfLife image/board and calculate next generations */
 	mainLoopGL();
-	
-	//GameOfLife.nextGeneration();
 
 	return 0;
 }
