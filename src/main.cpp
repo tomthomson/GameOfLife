@@ -48,7 +48,7 @@
 * Chance to create a new individual
 * when using random starting population
 */
-#define POPULATION 0.04
+#define POPULATION 0.4
 
 /**
 * Width and height of the Game of Life board
@@ -78,6 +78,10 @@ float mouseX, mouseY;
 float cameraAngleX;
 float cameraAngleY;
 float cameraDistance;
+GLfloat gridControlPoints[2][2][3] = {
+	{{-1.0, -1.0, 0.0}, {1.0, -1.0, 0.0}},
+	{{-1.0, 1.0, 0.0}, {1.0, 1.0, 0.0}}
+};
 static const char *shaderCode =		/* glShader for displaying floating-point texture */
 			"!!ARBfp1.0\n"
 			"TEX result.color, fragment.texcoord, texture[0], 2D; \n"
@@ -211,9 +215,45 @@ void display() {
 		glTexCoord2f(1.0f, 1.0f); glVertex2f(1.0f, 1.0f);
 		glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f, 1.0f);
 	glEnd();
-
+	
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glDisable(GL_FRAGMENT_PROGRAM_ARB);
+	
+	/* Draw grid */
+	if (false) {
+	glColor3f(0.0f, 0.2f, 1.0f);
+	glBegin(GL_LINES);
+		/* Horizontal lines. */
+		for (float i=-1.0f; i<=1.0f; i+=(2.0f/(float)HEIGHT)) {
+			glVertex2f(-1.0f, i);
+			glVertex2f(1.0f, i);
+		}
+		/* Vertical lines. */
+		for (float i=-1.0f; i<=1.0f; i+=(2.0f/(float)WIDTH)) {
+			glVertex2f(i, -1.0f);
+			glVertex2f(i, 1.0f);
+		}
+	glEnd();
+	}
+	/* second version */
+	if (false) {
+	glColor3f(0.0f, 0.2f, 1.0f);
+	glEnable(GL_MAP2_VERTEX_3);
+	glMap2f(GL_MAP2_VERTEX_3,
+		0.0, 1.0,	/* U ranges 0..1 */
+		3,			/* U stride, 3 floats per coord */
+		2,			/* U is 2nd order, ie. linear */
+		0.0, 1.0,	/* V ranges 0..1 */
+		2 * 3,		/* V stride, row is 2 coords, 3 floats per coord */
+		2,			/* V is 2nd order, ie linear */
+		&gridControlPoints[0][0][0]);	/* control points */
+		
+	glMapGrid2f(HEIGHT, 0.0, 1.0,WIDTH, 0.0, 1.0);
+	
+	glEvalMesh2(GL_LINE,
+		0, HEIGHT,	/* Starting at 0 mesh HEIGHT steps. */
+		0, WIDTH);	/* Starting at 0 mesh WIDTH steps. */
+	}
 	
 	glPopMatrix();
 	
@@ -296,14 +336,14 @@ void mouseMotion(int x, int y) {
 		mouseY = y;
 	}
 	if(mouseRightDown) {
-		cameraDistance += (y - mouseY) * 0.1f;
+		cameraDistance += (y - mouseY) * 0.05f;
 		mouseY = y;
 	}
 }
 /*
  * End of GLUT callback functions
  */
-
+ 
 /* Initialise OpenGL Utility Toolkit for windowing */
 int initGLUT(int argc, char *argv[]) {
 	
@@ -343,15 +383,6 @@ int initGLUT(int argc, char *argv[]) {
 	return handle;
 }
 
-void setCamera(float posX, float posY, float posZ,
-				float targetX, float targetY, float targetZ) {
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-	
-	/* eye(x,y,z), lookat(x,y,z), up(x,y,z) */
-    gluLookAt(posX, posY, posZ, targetX, targetY, targetZ, 0, 1, 0);
-}
-
 /* Initalise OpenGL */
 void initOpenGL(void) {
 	/* Shading method: GL_SMOOTH or GL_FLAT */
@@ -366,12 +397,10 @@ void initOpenGL(void) {
 	glEnable(GL_DEPTH_TEST);			// enables depth testing
 	glEnable(GL_TEXTURE_2D);
 	
-	glClearColor(0.2, 0.2, 0.2, 1.0);	// background color
+	glClearColor(36./255., 36./255., 85./255., 1.0);	// background color
 	glClearStencil(0);					// clear stencil buffer
 	glClearDepth(1.0f);					// depth buffer setup: 0 is near, 1 is far
 	glDepthFunc(GL_LEQUAL);				// type of depth test
-	
-	setCamera(0, 0, 5, 0, 0, 0);
 }
 
 GLuint compileASMShader(GLenum program_type, const char *code) {
@@ -466,6 +495,7 @@ int main(int argc, char **argv) {
 	
 	/* Setup OpenGL */
 	initDisplay(argc, argv);
+	
 	/* Display GameOfLife image/board and calculate next generations */
 	mainLoopGL();
 
