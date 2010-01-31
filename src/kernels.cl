@@ -58,11 +58,14 @@ void applyRules(__private uchar rules,
 		if (state.x == ALIVE.x) {
 			if ((n < 2) || (n > 3))
 				setState(coord, DEAD, image);
+				//setState(coord, (uint4)(state.x-5, state.y-5, state.z-5, 1), image);
 			else
 				setState(coord, ALIVE, image);
 		} else {
 			if (n == 3)
 				setState(coord, ALIVE, image);
+			//else if (state.x > DEAD.x)
+				//setState(coord, (uint4)(state.x-5, state.y-5, state.z-5, 1), image);
 			else
 				setState(coord, DEAD, image);
 		}

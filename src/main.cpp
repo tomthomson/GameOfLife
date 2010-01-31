@@ -53,8 +53,8 @@
 /**
 * Width and height of the Game of Life board
 */
-#define WIDTH 512
-#define HEIGHT 512
+#define WIDTH 1024
+#define HEIGHT 1024
 
 /**
 * Macro for OpenGL buffer offset
@@ -494,10 +494,14 @@ int main(int argc, char **argv) {
 	showControls();
 	
 	/* Setup OpenGL */
-	initDisplay(argc, argv);
+	//initDisplay(argc, argv);
 	
 	/* Display GameOfLife image/board and calculate next generations */
-	mainLoopGL();
-
+	//mainLoopGL();
+	
+	/* Calculate one generation for OpenCL profiler without OpenGL output */
+	GameOfLife.nextGeneration(GameOfLife.getImage());
+	cout << GameOfLife.getExecutionTime() << endl;
+	
 	return 0;
 }

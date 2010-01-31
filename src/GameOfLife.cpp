@@ -15,7 +15,7 @@ int GameOfLife::setupHost() {
 	image = (unsigned char *)malloc(imageSizeBytes);
 	if (image == NULL)
 		return -1;
-
+	
 	nextGenImage = (unsigned char *)malloc(imageSizeBytes);
 	if (nextGenImage == NULL)
 		return -1;
@@ -92,8 +92,7 @@ int GameOfLife::setupDevice(void) {
 
 	/* 
 	 * If there is a NVIDIA or AMD platform, use it.
-	 * Else pass a NULL and get whatever the
-	 * implementation thinks we should be using.
+	 * Else pass a NULL and use a default device.
 	 */
 	cl_context_properties cps[3] = { CL_CONTEXT_PLATFORM,
 									(cl_context_properties)platform, 0 };
@@ -125,14 +124,6 @@ int GameOfLife::setupDevice(void) {
 	status = clGetDeviceInfo(devices[0], CL_DEVICE_IMAGE_SUPPORT,
 								sizeof(cl_bool), &imageSupport, NULL);
 	assert(status == CL_SUCCESS && imageSupport == CL_TRUE);
-	/* Check OpenGL sharing support */
-	/*
-	#ifdef cl_khr_sharing
-		cout << "cl_khr_sharing supported" << std::endl;
-	#else
-		throw cl::Error(-667, "This OpenCL device does not support OpenGL sharing");
-	#endif
-	*/
 	
 	/**
 	* Create OpenCL command queue with profiling support
@@ -190,7 +181,7 @@ int GameOfLife::setupDevice(void) {
 		build_log = new char[ret_val_size+1];
 		clGetProgramBuildInfo(program, devices[0],
 				CL_PROGRAM_BUILD_LOG, ret_val_size, build_log, NULL);
-		// to be carefully, terminate with \0
+		/* to be carefully, terminate with \0 */
 		build_log[ret_val_size] = '\0';
 		
 		cerr << "\nBUILD LOG:\n" << build_log << endl;
