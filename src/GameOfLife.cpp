@@ -5,19 +5,19 @@ int GameOfLife::setup() {
 	if (setupHost() != 0)
 		return -1;
 
-	if (useOpenCL && setupDevice() != 0)
+	if (setupDevice() != 0)
 		return -1;
 
 	return 0;
 }
 
 int GameOfLife::setupHost() {
-	image = (unsigned char *)malloc(imageSizeBytes);
-	if (image == NULL)
+	imageA = (unsigned char *)malloc(imageSizeBytes);
+	if (imageA == NULL)
 		return -1;
 	
-	nextGenImage = (unsigned char *)malloc(imageSizeBytes);
-	if (nextGenImage == NULL)
+	imageB = (unsigned char *)malloc(imageSizeBytes);
+	if (imageB == NULL)
 		return -1;
 
 	/* Spawn initial population */
@@ -27,8 +27,8 @@ int GameOfLife::setupHost() {
 }
 
 void GameOfLife::spawnPopulation() {
-	spawnRandomPopulation();
-	//spawnStaticPopulation();
+	//spawnRandomPopulation();
+	spawnStaticPopulation();
 }
 
 void GameOfLife::spawnRandomPopulation() {
@@ -40,9 +40,9 @@ void GameOfLife::spawnRandomPopulation() {
 		for (int y = 0; y < height; y++) {
 			random = rand() % 100;
 			if ((float) random / 100.0f > population)
-				setState(x, y, DEAD, image);
+				setState(x, y, DEAD, imageA);
 			else
-				setState(x, y, ALIVE, image);
+				setState(x, y, ALIVE, imageA);
 		}
 	}
 }
@@ -50,11 +50,11 @@ void GameOfLife::spawnRandomPopulation() {
 void GameOfLife::spawnStaticPopulation() {
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++) {
-			setState(x, y, DEAD, image);
+			setState(x, y, DEAD, imageA);
 		}
 	}
 	for (int x = 100; x < 110; x++) {
-		setState(x, 100, ALIVE, image);
+		setState(x, 100, ALIVE, imageA);
 	}
 }
 
@@ -141,7 +141,7 @@ int GameOfLife::setupDevice(void) {
 	format.image_channel_data_type = CL_UNSIGNED_INT8;
 	// imageA		
 	deviceImageA = clCreateImage2D(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
-		&format, width, height, rowPitch, image, &status);
+		&format, width, height, rowPitch, imageA, &status);
 	assert(status == CL_SUCCESS);
 	// imageB
 	deviceImageB = clCreateImage2D(context, CL_MEM_READ_WRITE,
@@ -218,79 +218,98 @@ int GameOfLife::setupDevice(void) {
 }
 
 int GameOfLife::nextGeneration(unsigned char* bufferImage) {
-	if (useOpenCL)
-		return nextGenerationOpenCL(bufferImage);
-	else
+	if (CPUMode)
 		return nextGenerationCPU(bufferImage);
+	else
+		return nextGenerationOpenCL(bufferImage);
 }
 
 int GameOfLife::nextGenerationOpenCL(unsigned char* bufferImage) {
 	cl_int status = CL_SUCCESS;
+	cl_event kernelEvent = NULL;
+	cl_event copyEvent = NULL;
+	cl_int copyFinished;
+	generationsPerCopyEvent = 0;
 	
-	/* Enqueue a kernel run call and wait for kernel to finish */
-	cl_event kernelEvent;
-	status = clEnqueueNDRangeKernel(commandQueue, kernel, 2, NULL,
-		globalThreads, localThreads, NULL, NULL, &kernelEvent);
-	assert(status == CL_SUCCESS);
-	clFinish(commandQueue);
-
-	/* Calculate kernel execution time */
-	if (timerOutput==10) {
-		cl_ulong start, end;
-		
-		status |= clGetEventProfilingInfo(kernelEvent,
-			CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
-		
-		status |= clGetEventProfilingInfo(kernelEvent,
-			CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
-		assert(status == CL_SUCCESS);
-		
-		executionTime = (end - start) * 1.0e-6f;
-		timerOutput = 0;
-	} else {
-		timerOutput++;
-	}
+	/* 
+	 * Calculate next generations until copying the first
+	 * generation from device to host has finished
+	 */
+	do {
 	
-	clReleaseEvent(kernelEvent);
-	
-	/* Exchange images for current and next generation */
-	size_t origin[3] = {0,0,0};
-	size_t region[3] = {width,height,1};
-	if (ab) {
-		status |= clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&deviceImageB);
-		status |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&deviceImageA);
-		status |= clEnqueueReadImage(commandQueue, deviceImageB, CL_TRUE,
-			origin, region, rowPitch, 0, bufferImage, NULL, NULL, NULL);
+		/* Enqueue a kernel run call and wait for kernel to finish */
+		status = clEnqueueNDRangeKernel(commandQueue, kernel, 2, NULL,
+			globalThreads, localThreads, NULL, NULL, &kernelEvent);
 		assert(status == CL_SUCCESS);
-		ab = false;
-	} else {
-		status |= clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&deviceImageA);
-		status |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&deviceImageB);
-		status |= clEnqueueReadImage(commandQueue, deviceImageA, CL_TRUE,
-			origin, region, rowPitch, 0, bufferImage, NULL, NULL, NULL);
-		assert(status == CL_SUCCESS);
-		ab = true;
-	}
-	
-	/* Output test vector */
-	if (test) {
-		status = clEnqueueReadBuffer(commandQueue, testBuf, CL_TRUE,
-			0, testSizeBytes, testVec, NULL, NULL, NULL);
-		assert(status == CL_SUCCESS);
+		clWaitForEvents(1, &kernelEvent);
 		
-		for (int i = 0; i < 20; i++)
-			cout << (i%10) << "|";
-		for (int i = 0; i < 60; i++) {
-			if (i%20==0)
-				cout << endl;
-			cout << testVec[i] << "|";
+		/* Update generation counter */
+		generations++;
+		generationsPerCopyEvent++;
+		
+		/* Calculate kernel execution time */
+		if (copyEvent == NULL) {
+			cl_ulong start, end;
+			
+			status |= clGetEventProfilingInfo(kernelEvent,
+				CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+			
+			status |= clGetEventProfilingInfo(kernelEvent,
+				CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
+			assert(status == CL_SUCCESS);
+			
+			executionTime = (end - start) * 1.0e-6f;
 		}
-		cout << endl;
-	}
+		clReleaseEvent(kernelEvent);
+		
+		/* Exchange images for current and next generation */
+		status |= clSetKernelArg(kernel,
+					0, sizeof(cl_mem),
+					switchImages ? (void *)&deviceImageB : (void *)&deviceImageA );
+		status |= clSetKernelArg(kernel,
+					1, sizeof(cl_mem),
+					switchImages ? (void *)&deviceImageA : (void *)&deviceImageB );
+		
+		/* Update image on host for OpenGL output */
+		if (copyEvent == NULL) {
+			status |= clEnqueueReadImage(commandQueue,
+				switchImages ? deviceImageB : deviceImageA, readSync,
+				origin, region, rowPitch, 0, bufferImage,
+				NULL, NULL, &copyEvent);
+			assert(status == CL_SUCCESS);
+		}
+		
+		switchImages = !switchImages;
+		
+		/* Get status of copyEvent */
+		status = clGetEventInfo(
+			copyEvent, CL_EVENT_COMMAND_EXECUTION_STATUS,
+			sizeof(cl_int), &copyFinished,
+			NULL);
+		assert(status == CL_SUCCESS);
+		
+		/* Output test vector */
+		if (test) {
+			status = clEnqueueReadBuffer(commandQueue, testBuf, CL_TRUE,
+				0, testSizeBytes, testVec, NULL, NULL, NULL);
+			assert(status == CL_SUCCESS);
+			
+			for (int i = 0; i < 20; i++)
+				cout << (i%10) << "|";
+			for (int i = 0; i < 60; i++) {
+				if (i%20==0)
+					cout << endl;
+				cout << testVec[i] << "|";
+			}
+			cout << endl;
+		}
+	
+	} while (copyFinished != CL_COMPLETE);
+	clReleaseEvent(copyEvent);
 	
 	/* Single generation mode */
 	if (singleGen)
-		pause();
+		switchPause();
 
 	return 0;
 }
@@ -298,6 +317,7 @@ int GameOfLife::nextGenerationOpenCL(unsigned char* bufferImage) {
 int GameOfLife::nextGenerationCPU(unsigned char* bufferImage) {
 	int n;
 	unsigned char state;
+	
 	#ifdef WIN32
 		LARGE_INTEGER frequency;	/* ticks per second */
 		LARGE_INTEGER start;
@@ -318,19 +338,19 @@ int GameOfLife::nextGenerationCPU(unsigned char* bufferImage) {
 	/* Calculate next generation for each pixel */
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++) {
-			n = getNumberOfNeighbours(x, y);
-			state = getState(x, y);
+			n = getNumberOfNeighbours(x, y, switchImages?imageA:imageB);
+			state = getState(x, y, switchImages?imageA:imageB);
 			
 			if (state == ALIVE) {
 				if ((n < 2) || (n > 3))
-					setState(x, y, DEAD, nextGenImage);
+					setState(x, y, DEAD, switchImages?imageB:imageA);
 				else
-					setState(x, y, ALIVE, nextGenImage);
+					setState(x, y, ALIVE, switchImages?imageB:imageA);
 			} else {
 				if (n == 3)
-					setState(x, y, ALIVE, nextGenImage);
+					setState(x, y, ALIVE, switchImages?imageB:imageA);
 				else
-					setState(x, y, DEAD, nextGenImage);
+					setState(x, y, DEAD, switchImages?imageB:imageA);
 			}
 		}
 	}
@@ -343,32 +363,30 @@ int GameOfLife::nextGenerationCPU(unsigned char* bufferImage) {
 	#endif
 	
 	/* Calculate execution time for one generation */
-	if (timerOutput==10) {
-		#ifdef WIN32
-			executionTime = endCount.QuadPart * (1000.0f / frequency.QuadPart)
-							+ startCount.QuadPart * (1000.0f / frequency.QuadPart);
-		#else
-			executionTime = (float)(end.tv_sec - start.tv_sec) * 1000.0f
-							+ (float)(end.tv_usec - start.tv_usec) / 1000.0f;
-		#endif
-	} else {
-		timerOutput++;
-	}
+	#ifdef WIN32
+		executionTime = endCount.QuadPart * (1000.0f / frequency.QuadPart)
+						+ startCount.QuadPart * (1000.0f / frequency.QuadPart);
+	#else
+		executionTime = (float)(end.tv_sec - start.tv_sec) * 1000.0f
+						+ (float)(end.tv_usec - start.tv_usec) / 1000.0f;
+	#endif
 	
-	/* Update images for current and next generation */
-	memcpy(image, nextGenImage, imageSizeBytes);
-
-	/* Update image directly on the mapped buffer */
-	memcpy(bufferImage, nextGenImage, imageSizeBytes);
+	/* Update generation counter */
+	generations++;
+	
+	/* Update image for OpenGL output directly on the mapped buffer */
+	memcpy(bufferImage, switchImages?imageB:imageA, imageSizeBytes);
+	
+	switchImages = !switchImages;
 	
 	/* Single generation mode */
 	if (singleGen)
-		pause();
+		switchPause();
 	
 	return 0;
 }
 
-int GameOfLife::getNumberOfNeighbours(const int x, const int y) {
+int GameOfLife::getNumberOfNeighbours(const int x, const int y, const unsigned char *image) {
 	int counter = 0;
 	int neighbourCoord[2];
 
@@ -381,7 +399,7 @@ int GameOfLife::getNumberOfNeighbours(const int x, const int y) {
 				&& (neighbourCoord[1] < height)
 				&& (x + i > 0) && (y + k > 0))
 				{
-				if (getState(neighbourCoord[0], neighbourCoord[1]) == ALIVE)
+				if (getState(neighbourCoord[0], neighbourCoord[1], image) == ALIVE)
 					counter++;
 			}
 		}
@@ -393,30 +411,29 @@ int GameOfLife::getNumberOfNeighbours(const int x, const int y) {
 int GameOfLife::freeMem() {
 	/* Releases OpenCL resources */
 	cl_int status = CL_SUCCESS;
-	if (useOpenCL) {
-		status = clReleaseKernel(kernel);
-		assert(status == CL_SUCCESS);
-		status = clReleaseProgram(program);
-		assert(status == CL_SUCCESS);
-		status = clReleaseMemObject(deviceImageA);
-		assert(status == CL_SUCCESS);
-		status = clReleaseMemObject(deviceImageA);
-		assert(status == CL_SUCCESS);
-		if (test) {
-			status = clReleaseMemObject(testBuf);
-			assert(status == CL_SUCCESS);
-		}
-		status = clReleaseCommandQueue(commandQueue);
-		assert(status == CL_SUCCESS);
-		status = clReleaseContext(context);
+	
+	status = clReleaseKernel(kernel);
+	assert(status == CL_SUCCESS);
+	status = clReleaseProgram(program);
+	assert(status == CL_SUCCESS);
+	status = clReleaseMemObject(deviceImageA);
+	assert(status == CL_SUCCESS);
+	status = clReleaseMemObject(deviceImageA);
+	assert(status == CL_SUCCESS);
+	status = clReleaseCommandQueue(commandQueue);
+	assert(status == CL_SUCCESS);
+	status = clReleaseContext(context);
+	assert(status == CL_SUCCESS);
+	if (test) {
+		status = clReleaseMemObject(testBuf);
 		assert(status == CL_SUCCESS);
 	}
 
 	/* Release host resources */
-	if (image)
-		free(image);
-	if (nextGenImage)
-		free(nextGenImage);
+	if (imageA)
+		free(imageA);
+	if (imageB)
+		free(imageB);
 	if (devices)
 		free(devices);
 	

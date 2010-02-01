@@ -53,8 +53,8 @@
 /**
 * Width and height of the Game of Life board
 */
-#define WIDTH 1024
-#define HEIGHT 1024
+#define WIDTH 512
+#define HEIGHT 512
 
 /**
 * Macro for OpenGL buffer offset
@@ -78,6 +78,7 @@ float mouseX, mouseY;
 float cameraAngleX;
 float cameraAngleY;
 float cameraDistance;
+bool grid = false;
 GLfloat gridControlPoints[2][2][3] = {
 	{{-1.0, -1.0, 0.0}, {1.0, -1.0, 0.0}},
 	{{-1.0, 1.0, 0.0}, {1.0, 1.0, 0.0}}
@@ -96,6 +97,7 @@ void showHelp() {
 }
 
 /* Read commandline arguments */
+/*
 bool readFlags(int argc, char *argv[]) {
 	if (argc == 3) {
 		if (strcmp(argv[1], "-cl") == 0) {
@@ -118,13 +120,36 @@ bool readFlags(int argc, char *argv[]) {
 	}
 	return true;
 }
+*/
 
 /* Show keyboard controls for OpenGL window and Game of Life */
 void showControls() {
-	cout << "Controls:\n";
-	cout << "space \t start/stop calculation of next generation\n";
-	cout << "  g   \t switch single generation mode on/off\n";
-	cout << "q/esc \t quit\n" << endl;
+	//printf("\033[2J");
+	#ifdef WIN32
+		system("cls");
+	#else
+		system("clear");
+	#endif
+	cout << "----------------------------------" << endl;
+	cout << "---- John Conway's            ----" << endl;
+	cout << "---- Game of Life with OpenCL ----" << endl;
+	cout << "---- by Thomas Rumpf          ----" << endl;
+	cout << "----------------------------------" << endl;
+	
+	printf("Controls:\n");
+	printf(" key  | state | description\n");
+	printf("------|-------|------------\n");
+	printf("space | %s | start/stop calculation of next generation\n",
+					GameOfLife.isPaused() ? "stop " : "start");
+	printf("  g   | %s | draw grid for board\n",
+					grid ? " on  " : " off ");
+	printf("  s   | %s | stop after calculation of every generation\n",
+					GameOfLife.isSingleGeneration() ? " yes " : " no  ");
+	printf("  a   | %s | read image of next generation asynchronously \n",
+					GameOfLife.isReadSync() ? "sync " : "async");
+	printf("  c   | %s | calculate next generation with CPU/OpenCL \n",
+					GameOfLife.isCPUMode() ? " CPU " : " CL  ");
+	printf("q/esc |       | quit\n\n");
 }
 
 /* Free host/device memory */
@@ -132,31 +157,12 @@ void freeMem(void) {
 	GameOfLife.freeMem();
 	
 	glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, 0);
-	glDeleteBuffers(1, &glPBO);
-	glDeleteTextures(1, &glTex);
-	glDeleteProgramsARB(1, &glShader);
-}
-
-/*
- * GLUT support functions
- */
-/* Write 2D text using GLUT
- * The projection matrix must be set to orthogonal before calling this function. */
-void drawString(const char *str, int x, int y, float color[4], void *font) {
-	glPushAttrib(GL_LIGHTING_BIT | GL_CURRENT_BIT); // lighting and color mask
-	glDisable(GL_LIGHTING);		// need to disable lighting for proper text color
-
-	glColor4fv(color);			// set text color
-	glRasterPos2i(x, y);		// place text position
-
-	// loop all characters in the string
-	while(*str) {
-		glutBitmapCharacter(font, *str);
-		++str;
-	}
-
-	glEnable(GL_LIGHTING);
-	glPopAttrib();
+	if (glPBO)
+		glDeleteBuffers(1, &glPBO);
+	if (glTex)
+		glDeleteTextures(1, &glTex);
+	if (glShader)
+		glDeleteProgramsARB(1, &glShader);
 }
 
 /*
@@ -220,39 +226,23 @@ void display() {
 	glDisable(GL_FRAGMENT_PROGRAM_ARB);
 	
 	/* Draw grid */
-	if (false) {
-	glColor3f(0.0f, 0.2f, 1.0f);
-	glBegin(GL_LINES);
-		/* Horizontal lines. */
-		for (float i=-1.0f; i<=1.0f; i+=(2.0f/(float)HEIGHT)) {
-			glVertex2f(-1.0f, i);
-			glVertex2f(1.0f, i);
-		}
-		/* Vertical lines. */
-		for (float i=-1.0f; i<=1.0f; i+=(2.0f/(float)WIDTH)) {
-			glVertex2f(i, -1.0f);
-			glVertex2f(i, 1.0f);
-		}
-	glEnd();
-	}
-	/* second version */
-	if (false) {
-	glColor3f(0.0f, 0.2f, 1.0f);
-	glEnable(GL_MAP2_VERTEX_3);
-	glMap2f(GL_MAP2_VERTEX_3,
-		0.0, 1.0,	/* U ranges 0..1 */
-		3,			/* U stride, 3 floats per coord */
-		2,			/* U is 2nd order, ie. linear */
-		0.0, 1.0,	/* V ranges 0..1 */
-		2 * 3,		/* V stride, row is 2 coords, 3 floats per coord */
-		2,			/* V is 2nd order, ie linear */
-		&gridControlPoints[0][0][0]);	/* control points */
+	if (grid) {
+		glColor3f(0.0f, 0.2f, 1.0f);
+		glEnable(GL_MAP2_VERTEX_3);
+		glMap2f(GL_MAP2_VERTEX_3,
+			0.0, 1.0,	/* U ranges 0..1 */
+			3,			/* U stride, 3 floats per coord */
+			2,			/* U is 2nd order, ie. linear */
+			0.0, 1.0,	/* V ranges 0..1 */
+			2 * 3,		/* V stride, row is 2 coords, 3 floats per coord */
+			2,			/* V is 2nd order, ie linear */
+			&gridControlPoints[0][0][0]);	/* control points */
+			
+		glMapGrid2f(HEIGHT, 0.0, 1.0,WIDTH, 0.0, 1.0);
 		
-	glMapGrid2f(HEIGHT, 0.0, 1.0,WIDTH, 0.0, 1.0);
-	
-	glEvalMesh2(GL_LINE,
-		0, HEIGHT,	/* Starting at 0 mesh HEIGHT steps. */
-		0, WIDTH);	/* Starting at 0 mesh WIDTH steps. */
+		glEvalMesh2(GL_LINE,
+			0, HEIGHT,	/* Starting at 0 mesh HEIGHT steps. */
+			0, WIDTH);	/* Starting at 0 mesh WIDTH steps. */
 	}
 	
 	glPopMatrix();
@@ -262,8 +252,14 @@ void display() {
 
 	/* Append execution time of one generation to window title */
 	char title[64];
-	sprintf(title, "Conway's Game of Life with OpenCL @ %f ms/generation",
-					GameOfLife.getExecutionTime());
+	char mode[10];
+	GameOfLife.getExecutionMode(mode);
+	sprintf(title, "Game of Life @ %s @ %f ms/gen @ %i gens/copy @ generation %u",
+					mode,
+					GameOfLife.getExecutionTime(),
+					GameOfLife.getGenerationsPerCopyEvent(),
+					GameOfLife.getGenerations()
+					);
 	glutSetWindowTitle(title);
 }
 
@@ -275,13 +271,30 @@ void idle(void) {
 /* Keyboard function */
 void keyboard(unsigned char key, int mouseX, int mouseY) {
 	switch(key) {
-		/* Pressing space starts/stops calculation of next generation */
-		case ' ':
-			GameOfLife.pause();
+		/* Pressing c switches CPU mode on/off */
+		case 'c':
+			GameOfLife.switchCPUMode();
+			showControls();
 			break;
 		/* Pressing space starts/stops calculation of next generation */
+		case ' ':
+			GameOfLife.switchPause();
+			showControls();
+			break;
+		/* Pressing s switches single generation mode on/off */
+		case 's':
+			GameOfLife.switchSingleGeneration();
+			showControls();
+			break;
+		/* Pressing g switches grid for Game of Life board on/off */
 		case 'g':
-			GameOfLife.singleGeneration();
+			grid = !grid;
+			showControls();
+			break;
+		/* Pressing a switches synchronous reading of images on/off */
+		case 'a':
+			GameOfLife.switchreadSync();
+			showControls();
 			break;
 		/* Pressing escape or q exits */
 		case 27:
@@ -354,7 +367,7 @@ int initGLUT(int argc, char *argv[]) {
 						GLUT_RGBA   |		// color buffer with reg, green, blue, alpha
 						GLUT_ALPHA);
 	glutInitWindowSize(WIDTH, HEIGHT);		// window size
-	glutInitWindowPosition(200, 100);		// window location
+	glutInitWindowPosition(400, 100);		// window location
 	
 	/* Create a window with OpenGL context */
 	int handle = glutCreateWindow("Conway's Game of Life with OpenCL");
@@ -465,26 +478,16 @@ void mainLoopGL(void) {
 
 int main(int argc, char **argv) {
 	
-	//printf("\033[2J");
-	#ifdef WIN32
-		system("cls");
-	#else
-		system("clear");
-	#endif
-	cout << "----------------------------------" << endl;
-	cout << "---- John Conway's            ----" << endl;
-	cout << "---- Game of Life with OpenCL ----" << endl;
-	cout << "---- by Thomas Rumpf          ----" << endl;
-	cout << "----------------------------------" << endl;
-	
 	/* Register exit function */
 	atexit(freeMem);
 	
 	/* Read command line arguments */
+	/*
 	if (!readFlags(argc, argv)) {
 		showHelp();
 		return -1;
 	}
+	*/
 
 	/* Setup host/device memory, starting population and OpenCL */
 	if(GameOfLife.setup()!=0)
@@ -494,10 +497,10 @@ int main(int argc, char **argv) {
 	showControls();
 	
 	/* Setup OpenGL */
-	//initDisplay(argc, argv);
+	initDisplay(argc, argv);
 	
 	/* Display GameOfLife image/board and calculate next generations */
-	//mainLoopGL();
+	mainLoopGL();
 	
 	/* Calculate one generation for OpenCL profiler without OpenGL output */
 	GameOfLife.nextGeneration(GameOfLife.getImage());
