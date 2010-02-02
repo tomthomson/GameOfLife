@@ -75,9 +75,11 @@ void *font = GLUT_BITMAP_8_BY_13;
 bool mouseLeftDown;
 bool mouseRightDown;
 float mouseX, mouseY;
-float cameraAngleX;
-float cameraAngleY;
 float cameraDistance;
+float verticalMove;
+float horizontalMove;
+float clampZoom = 1.0f;
+float clampMove = 0.0f;
 bool grid = false;
 GLfloat gridControlPoints[2][2][3] = {
 	{{-1.0, -1.0, 0.0}, {1.0, -1.0, 0.0}},
@@ -124,7 +126,6 @@ bool readFlags(int argc, char *argv[]) {
 
 /* Show keyboard controls for OpenGL window and Game of Life */
 void showControls() {
-	//printf("\033[2J");
 	#ifdef WIN32
 		system("cls");
 	#else
@@ -197,12 +198,11 @@ void display() {
 	
 	/* Save the initial ModelView matrix before modifying ModelView matrix */
     glPushMatrix();
-	glLoadIdentity();					// reset modelview matrix
+	glLoadIdentity();								// reset modelview matrix
 	
 	/* Transform camera */
-	glScalef(cameraDistance,cameraDistance,1);	// zoom
-    glRotatef(cameraAngleX, 1, 0, 0);			// pitch
-    glRotatef(cameraAngleY, 0, 1, 0);			// heading
+	glScalef(cameraDistance,cameraDistance,1);		// zoom
+	glTranslatef(verticalMove,horizontalMove,0.0f);	// move
 	
 	/* Load texture from PBO */
 	glBindTexture(GL_TEXTURE_2D, glTex);
@@ -342,16 +342,20 @@ void mouse(int button, int state, int x, int y) {
 
 /* Mouse motion function */
 void mouseMotion(int x, int y) {
+	/* Move board */
 	if(mouseLeftDown) {
-		cameraAngleY += (x - mouseX);
-		cameraAngleX += (y - mouseY);
-		mouseX = x;
-		mouseY = y;
+		verticalMove = min(clampMove, max(-clampMove, verticalMove - (x - mouseX) * 0.01f));
+		horizontalMove = min(clampMove, max(-clampMove, horizontalMove + (y - mouseY) * 0.01f));
 	}
+	/* Zoom board */
 	if(mouseRightDown) {
-		cameraDistance += (y - mouseY) * 0.05f;
-		mouseY = y;
+		cameraDistance = max(clampZoom, cameraDistance - (y - mouseY) * 0.05f);
+		clampMove = (cameraDistance-1) / cameraDistance;
+		verticalMove = min(clampMove, max(-clampMove, verticalMove - (x - mouseX) * 0.01f));
+		horizontalMove = min(clampMove, max(-clampMove, horizontalMove + (y - mouseY) * 0.01f));
 	}
+	mouseX = x;
+	mouseY = y;
 }
 /*
  * End of GLUT callback functions
@@ -462,6 +466,9 @@ void initOpenGLBuffers() {
 void initDisplay(int argc, char *argv[]) {
 	mouseLeftDown = mouseRightDown = false;
 	cameraDistance = 1.0f;
+	horizontalMove = 0.0f;
+	verticalMove = 0.0f;
+	
 	initGLUT(argc, argv);
 	initOpenGL();
 	initOpenGLBuffers();

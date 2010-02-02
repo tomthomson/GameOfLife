@@ -27,8 +27,8 @@ int GameOfLife::setupHost() {
 }
 
 void GameOfLife::spawnPopulation() {
-	//spawnRandomPopulation();
-	spawnStaticPopulation();
+	spawnRandomPopulation();
+	//spawnStaticPopulation();
 }
 
 void GameOfLife::spawnRandomPopulation() {
