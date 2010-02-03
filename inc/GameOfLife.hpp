@@ -21,9 +21,10 @@
 
 class GameOfLife {
 private:
+	bool                      mode;  /**< false:random mode and true:file mode */
 	unsigned char            rules;  /**< rules for calculating next generation */
-	float               population;  /**< chance to create new individual when
-	                                        using random starting population */
+	float               population;  /**< density of live cells when using random starting population */
+	char                 *fileName;  /**< filename when using static starting population */
 	int                      width;  /**< width of image */
 	int                     height;  /**< height of image */
 	unsigned char          *imageA;  /**< first image on the host */
@@ -63,17 +64,12 @@ public:
 	* Constructor.
 	* Initialize member variables
 	*/
-	GameOfLife(unsigned char r, float p, int w, int h)
-			: rules(r), population(p), width(w), height(h),
-			imageA(NULL), imageB(NULL), generations(0), CPUMode(false),
-			paused(true), singleGen(false), switchImages(true),
+	GameOfLife()
+			: mode(false), rules(0), width(0), height(0), population(0.0f),
+			fileName(NULL), imageA(NULL), imageB(NULL), generations(0),
+			CPUMode(false),	paused(true), singleGen(false), switchImages(true),
 			executionTime(0.0f), readSync(CL_TRUE), generationsPerCopyEvent(0)
 		{
-			rowPitch = w*sizeof(char)*4;
-			imageSizeBytes = h*rowPitch;
-			origin[0]=0; origin[1]=0; origin[2]=0;
-			region[0]=w; region[1]=h; region[2]=1;
-			
 			test = false;
 			testSizeBytes = 60*sizeof(float);
 	}
@@ -221,6 +217,53 @@ public:
 	*/
 	unsigned char * getImage() {
 		return imageA;
+	}
+	
+	/**
+	* Get width of image.
+	* @return width
+	*/
+	int getWidth() {
+		return width;
+	}
+	
+	/**
+	* Get height of image.
+	* @return height
+	*/
+	int getHeight() {
+		return height;
+	}
+	
+	/**
+	* Set the starting population for random mode.
+	* @param _population chance to create a live cell
+	*/	
+	void setPopulation(float _population) {
+		mode = false;
+		population = _population;
+	}
+	
+	/**
+	* Set the filename for file mode.
+	* @param _fileName path to fileName used for starting population
+	*/
+	void setFilename(char *_fileName) {
+		mode = true;
+		memcpy(fileName, _fileName, strlen(_fileName));
+	}
+	
+	/**
+	* Set the width and height of the board.
+	* @param _width width
+	* @param _height height
+	*/
+	void setSize(int _width, int _height) {
+		width = _width, height = _height;
+		rowPitch = _width*sizeof(char)*4;
+		imageSizeBytes = _height*rowPitch;
+		origin[0]=0; origin[1]=0; origin[2]=0;
+		region[0]=_width; region[1]=_height; region[2]=1;
 	}
 
 private:

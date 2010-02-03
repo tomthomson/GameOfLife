@@ -27,8 +27,10 @@ int GameOfLife::setupHost() {
 }
 
 void GameOfLife::spawnPopulation() {
-	spawnRandomPopulation();
-	//spawnStaticPopulation();
+	if (mode)
+		spawnStaticPopulation();
+	else
+		spawnRandomPopulation();
 }
 
 void GameOfLife::spawnRandomPopulation() {
@@ -60,7 +62,7 @@ void GameOfLife::spawnStaticPopulation() {
 
 int GameOfLife::setupDevice(void) {
 	cl_int status = CL_SUCCESS;
-	const char* kernelFile = "kernels.cl";
+	const char *kernelFile = "kernels.cl";
 	KernelFile kernels;
 	
 	/*
@@ -411,19 +413,30 @@ int GameOfLife::getNumberOfNeighbours(const int x, const int y, const unsigned c
 int GameOfLife::freeMem() {
 	/* Releases OpenCL resources */
 	cl_int status = CL_SUCCESS;
-	
-	status = clReleaseKernel(kernel);
-	assert(status == CL_SUCCESS);
-	status = clReleaseProgram(program);
-	assert(status == CL_SUCCESS);
-	status = clReleaseMemObject(deviceImageA);
-	assert(status == CL_SUCCESS);
-	status = clReleaseMemObject(deviceImageA);
-	assert(status == CL_SUCCESS);
-	status = clReleaseCommandQueue(commandQueue);
-	assert(status == CL_SUCCESS);
-	status = clReleaseContext(context);
-	assert(status == CL_SUCCESS);
+	if (kernel) {
+		status = clReleaseKernel(kernel);
+		assert(status == CL_SUCCESS);
+	}
+	if (program) {
+		status = clReleaseProgram(program);
+		assert(status == CL_SUCCESS);
+	}
+	if (deviceImageA) {
+		status = clReleaseMemObject(deviceImageA);
+		assert(status == CL_SUCCESS);
+	}
+	if (deviceImageB) {
+		status = clReleaseMemObject(deviceImageB);
+		assert(status == CL_SUCCESS);
+	}
+	if (commandQueue) {
+		status = clReleaseCommandQueue(commandQueue);
+		assert(status == CL_SUCCESS);
+	}
+	if (context) {
+		status = clReleaseContext(context);
+		assert(status == CL_SUCCESS);
+	}
 	if (test) {
 		status = clReleaseMemObject(testBuf);
 		assert(status == CL_SUCCESS);

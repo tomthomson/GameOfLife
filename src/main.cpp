@@ -5,7 +5,7 @@
  */
 
 /********************************************
-*          Start of definitions
+*                Definitions
 *********************************************/
 #define GL_GLEXT_PROTOTYPES
 
@@ -22,52 +22,22 @@
 #include <sstream>
 #include <iomanip>
 #include <string>
+#include "anyoption.h"	/* for command line parsing */
 
 #include "../inc/GameOfLife.hpp"
-
-/** 
-* Rules for calculating next generation
-* 0:	Standard rules by John Conway
-  ---------------------------------
-	Dead cell:
-		Becomes live cell, if it has exactly three live neighbours.
-		Stays dead, if it has not three live neighbours.
-	Live cell:
-		Survives, if it has two or three live neighbours.
-		Dies, if it has one, two or more than thrre live neighbours.
-	
-* 1:	Custom rule
-  -----------------
-	Dead cell:
-	Live cell:
-*/
-/* Rule definitions: nextState = rule[state * numberOfNeighbours] */
-#define RULES 0
-
-/** 
-* Chance to create a new individual
-* when using random starting population
-*/
-#define POPULATION 0.4
-
-/**
-* Width and height of the Game of Life board
-*/
-#define WIDTH 512
-#define HEIGHT 512
 
 /**
 * Macro for OpenGL buffer offset
 */
 #define BUFFER_DATA(i) ((char *)0 + i)
-/********************************************
-*            End of definitions
-*********************************************/
 
 using namespace std;
 
+/********************************************
+*            Global variables
+*********************************************/
 /* Create an instance of GameOfLife */
-GameOfLife GameOfLife(RULES, POPULATION, WIDTH, HEIGHT);
+GameOfLife GameOfLife;
 
 /* Global variables for OpenGL */
 GLuint glPBO, glTex, glShader;
@@ -90,39 +60,64 @@ static const char *shaderCode =		/* glShader for displaying floating-point textu
 			"TEX result.color, fragment.texcoord, texture[0], 2D; \n"
 			"END";
 
-/* Show parameter help */
-void showHelp() {
-	cout << "Usage: GameOfLife [OPTION]... \n"
-		<< "\t-cl <0|1>\t implementation mode:\n"
-		<< "\t\t\t 0 = use CPU, 1 = use OpenCL (default)\n"
-		<< endl;
+/********************************************
+*            Global functions
+*********************************************/
+/* Setup command line parser */
+void setupCommandlineParser(AnyOption *opt) {
+	/* Set usage/help */
+	opt->addUsage( "Usage: GameOfLife -r PATH WIDTH [HEIGHT]" );
+	opt->addUsage( "  or:  GameOfLife -f DENSITY WIDTH [HEIGHT]" );
+	opt->addUsage( "" );
+	opt->addUsage( "Mandatory arguments to long options are mandatory for short options too." );
+	opt->addUsage( " -h  --help  	       Prints this help " );
+	opt->addUsage( " -f  --file PATH       Path to filename used for starting population" );
+	opt->addUsage( " -r  --random DENSITY  Use random starting population with given density" );
+	//opt->addUsage( " -r  --rule B3/S23    Apply this rule for next generations " );
+	opt->addUsage( "" );
+
+	/* Set the option string/characters */
+	/* by default all options will be checked on the command line */
+	opt->setCommandFlag("help",'h');
+	opt->setCommandOption("file",'f');
+	opt->setCommandOption("random",'r');
 }
 
 /* Read commandline arguments */
-/*
-bool readFlags(int argc, char *argv[]) {
-	if (argc == 3) {
-		if (strcmp(argv[1], "-cl") == 0) {
-			switch (argv[2][0]) {
-			case '0':
-				GameOfLife.setOpenCL(false);
-				break;
-			case '1':
-				break;
-			default:
-				cout << "invalid implementation mode" << endl;
-				return false;
-			}
-		} else {
-			return false;
-		}
-	} else {
-		if (argc != 1)
-			return false;
+bool readArguments(AnyOption *opt, int argc, char *argv[]) {
+	/* Go through the command line and get the options */
+    opt->processCommandArgs(argc,argv);
+	
+	/* Print usage if help needed */
+	if (opt->getFlag("help") || opt->getFlag('h')) {
+		return -1;
 	}
-	return true;
+	
+	/* Get file or random population */
+	if (opt->getValue("file") != NULL || opt->getValue('f') != NULL) {
+		GameOfLife.setFilename(opt->getValue('f'));
+	} else if (atof(opt->getValue("random")) != 0.0f || atof(opt->getValue('r')) != 0.0f) {
+		GameOfLife.setPopulation(atof(opt->getValue('r')));
+	} else {
+		return -1;
+	}
+	
+	/* Get width and height */
+	switch ((unsigned int)argc) {
+	case 4:
+		GameOfLife.setSize(atoi(argv[3]),atoi(argv[3]));
+		break;
+	case 5:
+		GameOfLife.setSize(atoi(argv[3]),atoi(argv[4]));
+		break;
+	default:
+		return -1;
+		break;
+	}
+	
+	delete opt;
+	return 0;
 }
-*/
 
 /* Show keyboard controls for OpenGL window and Game of Life */
 void showControls() {
@@ -136,7 +131,10 @@ void showControls() {
 	cout << "---- Game of Life with OpenCL ----" << endl;
 	cout << "---- by Thomas Rumpf          ----" << endl;
 	cout << "----------------------------------" << endl;
-	
+	printf("Preferences:\n");
+	printf("width: %i | height: %i \n",
+			GameOfLife.getWidth(), GameOfLife.getHeight());
+	printf("\n");
 	printf("Controls:\n");
 	printf(" key  | state | description\n");
 	printf("------|-------|------------\n");
@@ -166,9 +164,9 @@ void freeMem(void) {
 		glDeleteProgramsARB(1, &glShader);
 }
 
-/*
- * GLUT callback functions
- */
+/********************************************
+*         GLUT callback functions
+*********************************************/
 /* Display function */
 void display() {
 	/*
@@ -206,7 +204,7 @@ void display() {
 	
 	/* Load texture from PBO */
 	glBindTexture(GL_TEXTURE_2D, glTex);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WIDTH, HEIGHT,
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, GameOfLife.getWidth(), GameOfLife.getHeight(),
 					GL_RGBA, GL_UNSIGNED_BYTE, BUFFER_DATA(0));
 
 	/* Fragment program is required to display floating point texture */
@@ -238,11 +236,11 @@ void display() {
 			2,			/* V is 2nd order, ie linear */
 			&gridControlPoints[0][0][0]);	/* control points */
 			
-		glMapGrid2f(HEIGHT, 0.0, 1.0,WIDTH, 0.0, 1.0);
+		glMapGrid2f(GameOfLife.getWidth(), 0.0, 1.0, GameOfLife.getHeight(), 0.0, 1.0);
 		
 		glEvalMesh2(GL_LINE,
-			0, HEIGHT,	/* Starting at 0 mesh HEIGHT steps. */
-			0, WIDTH);	/* Starting at 0 mesh WIDTH steps. */
+			0, GameOfLife.getWidth(),	/* Starting at 0 mesh GameOfLife.getWidth() steps. */
+			0, GameOfLife.getHeight());	/* Starting at 0 mesh GameOfLife.getHeight() steps. */
 	}
 	
 	glPopMatrix();
@@ -357,10 +355,10 @@ void mouseMotion(int x, int y) {
 	mouseX = x;
 	mouseY = y;
 }
-/*
- * End of GLUT callback functions
- */
- 
+
+/********************************************
+*         GLUT init functions
+*********************************************/ 
 /* Initialise OpenGL Utility Toolkit for windowing */
 int initGLUT(int argc, char *argv[]) {
 	
@@ -370,7 +368,7 @@ int initGLUT(int argc, char *argv[]) {
 						GLUT_DEPTH  |		// depth buffer available
 						GLUT_RGBA   |		// color buffer with reg, green, blue, alpha
 						GLUT_ALPHA);
-	glutInitWindowSize(WIDTH, HEIGHT);		// window size
+	glutInitWindowSize(GameOfLife.getWidth(), GameOfLife.getHeight());		// window size
 	glutInitWindowPosition(400, 100);		// window location
 	
 	/* Create a window with OpenGL context */
@@ -447,7 +445,7 @@ void initOpenGLBuffers() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, WIDTH, HEIGHT,
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, GameOfLife.getWidth(), GameOfLife.getHeight(),
 					0, GL_RGBA, GL_UNSIGNED_BYTE, GameOfLife.getImage());
 	
 	/* Generate a new buffer object */
@@ -455,7 +453,7 @@ void initOpenGLBuffers() {
 	/* Bind the buffer object */
 	glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, glPBO);
 	/* Copy pixel data to the buffer object */
-	glBufferData(GL_PIXEL_UNPACK_BUFFER_ARB, WIDTH * HEIGHT * 4,
+	glBufferData(GL_PIXEL_UNPACK_BUFFER_ARB, GameOfLife.getWidth() * GameOfLife.getHeight() * 4,
 					GameOfLife.getImage(), GL_STREAM_DRAW_ARB);
 	
 	/* Load shader program */
@@ -474,6 +472,9 @@ void initDisplay(int argc, char *argv[]) {
 	initOpenGLBuffers();
 }
 
+/********************************************
+*             MAIN functions
+*********************************************/
 /* OpenGL main loop */
 void mainLoopGL(void) {
 	/* last GLUT call (LOOP)
@@ -488,13 +489,18 @@ int main(int argc, char **argv) {
 	/* Register exit function */
 	atexit(freeMem);
 	
+	/* Create an instance of command line parser */
+	AnyOption *opt = new AnyOption();
+	
+	/* Setup command line parser */
+	setupCommandlineParser(opt);
+	
 	/* Read command line arguments */
-	/*
-	if (!readFlags(argc, argv)) {
-		showHelp();
+	if (readArguments(opt, argc, argv) != 0) {
+		opt->printUsage();
+	    delete opt;
 		return -1;
 	}
-	*/
 
 	/* Setup host/device memory, starting population and OpenCL */
 	if(GameOfLife.setup()!=0)
@@ -510,8 +516,8 @@ int main(int argc, char **argv) {
 	mainLoopGL();
 	
 	/* Calculate one generation for OpenCL profiler without OpenGL output */
-	GameOfLife.nextGeneration(GameOfLife.getImage());
-	cout << GameOfLife.getExecutionTime() << endl;
+	//GameOfLife.nextGeneration(GameOfLife.getImage());
+	//cout << GameOfLife.getExecutionTime() << endl;
 	
 	return 0;
 }
