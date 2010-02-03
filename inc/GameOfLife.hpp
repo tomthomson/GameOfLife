@@ -13,7 +13,9 @@
 	#include <sys/time.h>			/* for gettimeofday() */
 #endif
 #include <CL/cl.h>					/* OpenCL definitions */
+
 #include "../inc/KernelFile.hpp"	/* for reading OpenCL kernel files */
+#include "../inc/GameFile.hpp"		/* for reading population files */
 
 /* global definition of live and dead state */
 #define ALIVE 255
@@ -21,10 +23,10 @@
 
 class GameOfLife {
 private:
-	bool                      mode;  /**< false:random mode and true:file mode */
+	bool                 spawnMode;  /**< false:random mode and true:file mode */
 	unsigned char            rules;  /**< rules for calculating next generation */
 	float               population;  /**< density of live cells when using random starting population */
-	char                 *fileName;  /**< filename when using static starting population */
+	GameFile              gameFile;  /**< file when using static starting population */
 	int                      width;  /**< width of image */
 	int                     height;  /**< height of image */
 	unsigned char          *imageA;  /**< first image on the host */
@@ -64,9 +66,9 @@ public:
 	* Constructor.
 	* Initialize member variables
 	*/
-	GameOfLife()
-			: mode(false), rules(0), width(0), height(0), population(0.0f),
-			fileName(NULL), imageA(NULL), imageB(NULL), generations(0),
+	GameOfLife():
+			spawnMode(false), rules(0), width(0), height(0), population(0.0f),
+			imageA(NULL), imageB(NULL), generations(0),
 			CPUMode(false),	paused(true), singleGen(false), switchImages(true),
 			executionTime(0.0f), readSync(CL_TRUE), generationsPerCopyEvent(0)
 		{
@@ -240,7 +242,7 @@ public:
 	* @param _population chance to create a live cell
 	*/	
 	void setPopulation(float _population) {
-		mode = false;
+		spawnMode = false;
 		population = _population;
 	}
 	
@@ -249,8 +251,8 @@ public:
 	* @param _fileName path to fileName used for starting population
 	*/
 	void setFilename(char *_fileName) {
-		mode = true;
-		memcpy(fileName, _fileName, strlen(_fileName));
+		spawnMode = true;
+		gameFile.setFilename(_fileName);
 	}
 	
 	/**
@@ -259,11 +261,8 @@ public:
 	* @param _height height
 	*/
 	void setSize(int _width, int _height) {
-		width = _width, height = _height;
-		rowPitch = _width*sizeof(char)*4;
-		imageSizeBytes = _height*rowPitch;
-		origin[0]=0; origin[1]=0; origin[2]=0;
-		region[0]=_width; region[1]=_height; region[2]=1;
+		width = _width;
+		height = _height;
 	}
 
 private:
@@ -287,17 +286,17 @@ private:
 	/**
 	* Spawn initial population.
 	*/
-	void spawnPopulation();
+	int spawnPopulation();
 	
 	/**
 	* Spawn random population.
 	*/
-	void spawnRandomPopulation();
+	int spawnRandomPopulation();
 	
 	/**
 	* Spawn predefined population.
 	*/
-	void spawnStaticPopulation();
+	int spawnStaticPopulation();
 
 	/**
 	* Calculate next generation with OpenCL.

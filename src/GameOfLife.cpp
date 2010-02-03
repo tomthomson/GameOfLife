@@ -7,11 +7,16 @@ int GameOfLife::setup() {
 
 	if (setupDevice() != 0)
 		return -1;
-
+	
 	return 0;
 }
 
 int GameOfLife::setupHost() {
+	rowPitch = width*sizeof(char)*4;
+	imageSizeBytes = height*rowPitch;
+	origin[0]=0; origin[1]=0; origin[2]=0;
+	region[0]=width; region[1]=height; region[2]=1;
+	
 	imageA = (unsigned char *)malloc(imageSizeBytes);
 	if (imageA == NULL)
 		return -1;
@@ -21,19 +26,34 @@ int GameOfLife::setupHost() {
 		return -1;
 
 	/* Spawn initial population */
-	spawnPopulation();
+	if (spawnPopulation() != 0)
+		return -1;
 
 	return 0;
 }
 
-void GameOfLife::spawnPopulation() {
-	if (mode)
-		spawnStaticPopulation();
-	else
-		spawnRandomPopulation();
+int GameOfLife::spawnPopulation() {
+	if (spawnMode) {
+		/* Read population from file */
+		if (gameFile.open() != 0) {
+			cerr << "Cannot open file\n" << endl;
+			return -1;
+		}
+		if (gameFile.parse() != 0) {
+			cerr << "Parse error\n" << endl;
+			return -1;
+		}
+		cout << gameFile.getWidth() << "," << gameFile.getHeight() << endl;
+		
+		/* Spawn population from file */
+		return spawnStaticPopulation();
+	} else {
+		/* Spawn random population with given density */
+		return spawnRandomPopulation();
+	}
 }
 
-void GameOfLife::spawnRandomPopulation() {
+int GameOfLife::spawnRandomPopulation() {
 	cout << "Spawning population for Game of Life with a chance of "
 			<< population << "..." << endl << endl;
 	int random;
@@ -47,9 +67,11 @@ void GameOfLife::spawnRandomPopulation() {
 				setState(x, y, ALIVE, imageA);
 		}
 	}
+	
+	return 0;
 }
 
-void GameOfLife::spawnStaticPopulation() {
+int GameOfLife::spawnStaticPopulation() {
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++) {
 			setState(x, y, DEAD, imageA);
@@ -58,6 +80,7 @@ void GameOfLife::spawnStaticPopulation() {
 	for (int x = 100; x < 110; x++) {
 		setState(x, 100, ALIVE, imageA);
 	}
+	return 0;
 }
 
 int GameOfLife::setupDevice(void) {

@@ -41,7 +41,6 @@ GameOfLife GameOfLife;
 
 /* Global variables for OpenGL */
 GLuint glPBO, glTex, glShader;
-void *font = GLUT_BITMAP_8_BY_13;
 bool mouseLeftDown;
 bool mouseRightDown;
 float mouseX, mouseY;
@@ -84,7 +83,7 @@ void setupCommandlineParser(AnyOption *opt) {
 }
 
 /* Read commandline arguments */
-bool readArguments(AnyOption *opt, int argc, char *argv[]) {
+int readArguments(AnyOption *opt, int argc, char *argv[]) {
 	/* Go through the command line and get the options */
     opt->processCommandArgs(argc,argv);
 	
@@ -507,7 +506,7 @@ int main(int argc, char **argv) {
 		return -1;
 	
 	/* Show controls for Game of Life in console */
-	showControls();
+	//showControls();
 	
 	/* Setup OpenGL */
 	initDisplay(argc, argv);
