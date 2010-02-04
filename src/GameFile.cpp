@@ -65,11 +65,80 @@ bool GameFile::parseHeader() {
 	return false;
 }
 
+int GameFile::parsePattern() {
+	int number = 0;
+	bool isNumber = false;
+	bool isCell = false;
+	int x = 0;
+	int y = 0;
+	unsigned char color;
+	
+	for (;;) {
+		if (skipWhiteSpace() != 0) return -1;
+		switch (c) {
+		default:
+			if (c >= '0' && c <= '9') {
+				number = (isNumber ? 10*number : 0) + (c-'0');
+				isNumber = true;
+				continue;
+			} else {
+				return -1;
+			}
+		case EOF:
+			cerr << "Missing end-of-file '!' mark" << endl;
+			return -1;
+		case '!':
+			if (y == height)
+				return 0;
+			else
+				return -1;
+		case 'b':
+			isCell = true;
+			color = 0;
+			break;
+		case 'o':
+			isCell = true;
+			color = 255;
+			break;
+		case 'x':
+			isCell = true;
+			color = 255;
+			break;
+		case 'y':
+			isCell = true;
+			color = 255;
+			break;
+		case 'z':
+			isCell = true;
+			color = 255;
+			break;
+		case '$':
+			if (isNumber)
+				y += number;
+			else
+				y++;
+			number = 0;
+			isNumber = false;
+			continue;
+		}
+		if (isNumber && isCell) {
+			for (int i = 0; i < number; x++) {
+				pattern[4*x + (4*width*y)] = color;
+				pattern[(4*x+1) + (4*width*y)] = color;
+				pattern[(4*x+2) + (4*width*y)] = color;
+				pattern[(4*x+3) + (4*width*y)] = 1;
+			}
+			number = 0;
+			isNumber = false;
+			isCell = false;
+		}
+	}
+	return 0;
+}
+
 int GameFile::parse() {
 	int c;					/* character read from file */
 	bool noHeader = false;  /* header specified */
-	int curx;				/* x coordinate being written */
-	int cury;				/* y coordinate being written */
 	
 	/* Skip leading comment lines */
 	for (;;) {
@@ -97,56 +166,14 @@ int GameFile::parse() {
 	
 	/* Check for header line and parse it */
 	noHeader = parseHeader();
+
+	if (noHeader)
+		return -1;
+
+	pattern = (unsigned char *)malloc(4*width*height*sizeof(char));
 	
 	/* Parse pattern */
-	/*
-	for (repl = 1, ifrepl = 0, curx = cury = 0; ; ) {
-		while ((c = getc (file)) == ' ' || c == '\t' || c == '\n');
-		switch (c) {
-		default:
-			if (c >= '0' && c <= '9') {
-				repl = (ifrepl ? 10*repl : 0) + (c-'0');
-				ifrepl = 1;
-				continue;
-			} else {
-				outputChars[5] = c;
-				c = 5;
-				break;
-			}
-		case EOF:
-			fprintf (stderr, "Missing end-of-file '!' mark\n");
-		case '!':
-			if (curx != 0)		// ALWAYS flush last line
-				fprintf (dstFile, "\n");
-			return;
-		case 'b':
-			c = 0;
-			break;
-		case 'o':
-			c = 1;
-			break;
-		case 'x':
-			c = 2;
-			break;
-		case 'y':
-			c = 3;
-			break;
-		case 'z':
-			c = 4;
-			break;
-		case '$':
-			for (; repl > 0; ++cury, --repl, curx = 0)
-				fprintf (dstFile, "\n");
-			continue;
-		}
-
-		for (c = outputChars[c]; repl > 0; ++curx, --repl)
-			putc (c, dstFile);
-
-		repl = 1;
-		ifrepl = 0;
-	}
-	*/
+	return parsePattern();
 	
 	return 0;
 }

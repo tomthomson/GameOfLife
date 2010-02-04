@@ -8,11 +8,12 @@
 
 class GameFile {
 private:
-	FILE        *file;  /**< FILE for population */
-	char    *fileName;  /**< filename for file */
-	int         width;  /**< width of specified pattern */
-	int        height;  /**< height of specified pattern */
-	int             c;  /**< current character being read */
+	FILE               *file;  /**< FILE for population */
+	char           *fileName;  /**< filename for file */
+	unsigned char   *pattern;  /**< parsed pattern */
+	int                width;  /**< width of specified pattern */
+	int               height;  /**< height of specified pattern */
+	int                    c;  /**< current character being read */
 
 public:
 	/** 
@@ -86,6 +87,12 @@ private:
 	* @return noHeader
 	*/
 	bool parseHeader();
+	
+	/**
+	* Parse the pattern
+	* @return 0 on success and -1 on failure
+	*/
+	int parsePattern();
 };
 
 #endif
