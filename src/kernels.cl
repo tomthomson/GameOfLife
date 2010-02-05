@@ -38,8 +38,7 @@ uchar getNumberOfNeighbours(
 						  (float)coord.y+((float)k/(float)imageDim.x)
 						 );
 			neighbourState = getState(neighbourCoord, image);
-			if (neighbourState.x == ALIVE.x)
-				counter++;
+			counter += (neighbourState.x >> 7);
 		}
 	}
 	
@@ -58,14 +57,11 @@ void applyRules(__private uchar rules,
 		if (state.x == ALIVE.x) {
 			if ((n < 2) || (n > 3))
 				setState(coord, DEAD, image);
-				//setState(coord, (uint4)(state.x-5, state.y-5, state.z-5, 1), image);
 			else
 				setState(coord, ALIVE, image);
 		} else {
 			if (n == 3)
 				setState(coord, ALIVE, image);
-			//else if (state.x > DEAD.x)
-				//setState(coord, (uint4)(state.x-5, state.y-5, state.z-5, 1), image);
 			else
 				setState(coord, DEAD, image);
 		}
@@ -74,7 +70,7 @@ void applyRules(__private uchar rules,
 }
 
 __kernel
-__attribute__( (reqd_work_group_size(24, 16, 1)) )
+__attribute__( (reqd_work_group_size(13, 32, 1)) )
 				void nextGeneration(
 				__read_only image2d_t imageA,
 				__write_only image2d_t imageB,
@@ -84,8 +80,6 @@ __attribute__( (reqd_work_group_size(24, 16, 1)) )
 	/* Get image dimensions */
 	__private int2 imageDim = get_image_dim(imageA);
 	/* Get coordinates of current cell and calculate normalized values */
-	//__private int index = get_global_id(0) + get_global_id(1) * imageDim.x;
-	//__private int2 coord = (int2)(index % imageDim.x, index / imageDim.x);
 	__private int2 coord = (int2)(get_global_id(0),get_global_id(1));
 	__private float2 coordNormalized = (float2)((float)coord.x/(float)imageDim.x,
 									  (float)coord.y/(float)imageDim.y);
@@ -106,4 +100,10 @@ __attribute__( (reqd_work_group_size(24, 16, 1)) )
 	
 	/* Apply rules for next generation */
 	applyRules(rules, state, numberOfNeighbours, coord, imageB);
+	/*
+	if (coord.x == 100 && coord.y == 100 || coord.x == 102 && coord.y == 102)
+		setState(coord, ALIVE, imageB);
+	else
+		setState(coord, DEAD, imageB);
+	*/
 }

@@ -34,7 +34,7 @@ include_directories(inc)
 ###
 # build
 ###
-add_executable(GameOfLife src/main.cpp src/GameOfLife.cpp src/anyoption.cpp src/GameFile.cpp src/KernelFile.cpp)
+add_executable(GameOfLife src/main.cpp src/GameOfLife.cpp src/anyoption.cpp src/PatternFile.cpp src/KernelFile.cpp)
 target_link_libraries(GameOfLife ${OPENCL_LIBRARIES} ${GLUT_LIBRARY} ${OPENGL_LIBRARY})
 
 ###

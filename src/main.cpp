@@ -65,8 +65,8 @@ static const char *shaderCode =		/* glShader for displaying floating-point textu
 /* Setup command line parser */
 void setupCommandlineParser(AnyOption *opt) {
 	/* Set usage/help */
-	opt->addUsage( "Usage: GameOfLife -r PATH WIDTH [HEIGHT]" );
-	opt->addUsage( "  or:  GameOfLife -f DENSITY WIDTH [HEIGHT]" );
+	opt->addUsage( "Usage: GameOfLife -f PATH WIDTH [HEIGHT]" );
+	opt->addUsage( "  or:  GameOfLife -r DENSITY WIDTH [HEIGHT]" );
 	opt->addUsage( "" );
 	opt->addUsage( "Mandatory arguments to long options are mandatory for short options too." );
 	opt->addUsage( " -h  --help  	       Prints this help " );
@@ -172,6 +172,10 @@ void display() {
 	 * Calculate next generation if game is not paused
 	 */
 	if(!GameOfLife.isPaused()) {
+		/*
+		 * Map buffer to host memory space
+		 * and return address of buffer in host address space
+		 */
 		GLubyte* bufferImage =
 				(GLubyte *)glMapBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, GL_WRITE_ONLY_ARB);
 
@@ -348,8 +352,8 @@ void mouseMotion(int x, int y) {
 	if(mouseRightDown) {
 		cameraDistance = max(clampZoom, cameraDistance - (y - mouseY) * 0.05f);
 		clampMove = (cameraDistance-1) / cameraDistance;
-		verticalMove = min(clampMove, max(-clampMove, verticalMove - (x - mouseX) * 0.01f));
-		horizontalMove = min(clampMove, max(-clampMove, horizontalMove + (y - mouseY) * 0.01f));
+		//verticalMove = min(clampMove, max(-clampMove, verticalMove - (x - mouseX) * 0.01f));
+		//horizontalMove = min(clampMove, max(-clampMove, horizontalMove + (y - mouseY) * 0.01f));
 	}
 	mouseX = x;
 	mouseY = y;
@@ -401,8 +405,8 @@ int initGLUT(int argc, char *argv[]) {
 void initOpenGL(void) {
 	/* Shading method: GL_SMOOTH or GL_FLAT */
 	glShadeModel(GL_SMOOTH);
-	/* 4-byte pixel alignment */
-	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+	
+	//glPixelStorei(GL_UNPACK_ROW_LENGTH, GameOfLife.getWidth());
 	
 	/* Hints */
 	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_FASTEST);
@@ -506,7 +510,7 @@ int main(int argc, char **argv) {
 		return -1;
 	
 	/* Show controls for Game of Life in console */
-	//showControls();
+	showControls();
 	
 	/* Setup OpenGL */
 	initDisplay(argc, argv);

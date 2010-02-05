@@ -15,9 +15,11 @@
 #include <CL/cl.h>					/* OpenCL definitions */
 
 #include "../inc/KernelFile.hpp"	/* for reading OpenCL kernel files */
-#include "../inc/GameFile.hpp"		/* for reading population files */
+#include "../inc/PatternFile.hpp"	/* for reading population files */
 
-/* global definition of live and dead state */
+/**
+* Definition of live and dead state
+*/
 #define ALIVE 255
 #define DEAD 0
 
@@ -26,11 +28,10 @@ private:
 	bool                 spawnMode;  /**< false:random mode and true:file mode */
 	unsigned char            rules;  /**< rules for calculating next generation */
 	float               population;  /**< density of live cells when using random starting population */
-	GameFile              gameFile;  /**< file when using static starting population */
-	int                      width;  /**< width of image */
-	int                     height;  /**< height of image */
+	PatternFile        patternFile;  /**< file when using static starting population */
 	unsigned char          *imageA;  /**< first image on the host */
 	unsigned char          *imageB;  /**< second image on the host */
+	int               imageSize[2];  /**< width and height of image */
 	size_t          imageSizeBytes;  /**< size of image in bytes */
 	bool              switchImages;  /**< switch for image exchange */
 
@@ -67,11 +68,23 @@ public:
 	* Initialize member variables
 	*/
 	GameOfLife():
-			spawnMode(false), rules(0), width(0), height(0), population(0.0f),
-			imageA(NULL), imageB(NULL), generations(0),
-			CPUMode(false),	paused(true), singleGen(false), switchImages(true),
-			executionTime(0.0f), readSync(CL_TRUE), generationsPerCopyEvent(0)
+			spawnMode(false),
+			rules(0),
+			population(0.0f),
+			imageA(NULL),
+			imageB(NULL),
+			generations(0),
+			CPUMode(false),
+			paused(true),
+			singleGen(false),
+			switchImages(true),
+			executionTime(0.0f),
+			readSync(CL_TRUE),
+			generationsPerCopyEvent(0)
 		{
+			imageSize[0] = 0;
+			imageSize[1] = 0;
+			
 			test = false;
 			testSizeBytes = 60*sizeof(float);
 	}
@@ -223,18 +236,18 @@ public:
 	
 	/**
 	* Get width of image.
-	* @return width
+	* @return imageSize[0]
 	*/
 	int getWidth() {
-		return width;
+		return imageSize[0];
 	}
 	
 	/**
 	* Get height of image.
-	* @return height
+	* @return imageSize[1]
 	*/
 	int getHeight() {
-		return height;
+		return imageSize[1];
 	}
 	
 	/**
@@ -252,7 +265,7 @@ public:
 	*/
 	void setFilename(char *_fileName) {
 		spawnMode = true;
-		gameFile.setFilename(_fileName);
+		patternFile.setFilename(_fileName);
 	}
 	
 	/**
@@ -261,8 +274,8 @@ public:
 	* @param _height height
 	*/
 	void setSize(int _width, int _height) {
-		width = _width;
-		height = _height;
+		imageSize[0] = _width;
+		imageSize[1] = _height;
 	}
 
 private:
@@ -325,8 +338,8 @@ private:
 	* @param image get state from this image
 	* @return state
 	*/
-	unsigned char getState(const int x, const int y, const unsigned char *image) {
-		return (image[4*x + (4*width*y)]);
+	inline unsigned char getState(const int x, const int y, const unsigned char *image) {
+		return (image[4*x + (4*imageSize[0]*y)]);
 	}
 	
 	/**
@@ -337,10 +350,10 @@ private:
 	* @param image update state in this image
 	*/
 	void setState(const int x, const int y, const unsigned char state, unsigned char *image) {
-		image[4*x + (4*width*y)] = state;
-		image[(4*x+1) + (4*width*y)] = state;
-		image[(4*x+2) + (4*width*y)] = state;
-		image[(4*x+3) + (4*width*y)] = 1;
+		image[4*x + (4*imageSize[0]*y)] = state;
+		image[(4*x+1) + (4*imageSize[0]*y)] = state;
+		image[(4*x+2) + (4*imageSize[0]*y)] = state;
+		image[(4*x+3) + (4*imageSize[0]*y)] = 1;
 	}
 };
 

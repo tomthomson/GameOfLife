@@ -1,18 +1,18 @@
-#ifndef GAMEFILE_HPP_
-#define GAMEFILE_HPP_
+#ifndef PATTERNFILE_HPP_
+#define PATTERNFILE_HPP_
 
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
 
-class GameFile {
+class PatternFile {
 private:
 	FILE               *file;  /**< FILE for population */
 	char           *fileName;  /**< filename for file */
 	unsigned char   *pattern;  /**< parsed pattern */
-	int                width;  /**< width of specified pattern */
-	int               height;  /**< height of specified pattern */
+	size_t  patternSizeBytes;  /**< size of pattern in bytes */
+	int       patternSize[2];  /**< width and height of specified pattern */
 	int                    c;  /**< current character being read */
 
 public:
@@ -20,24 +20,14 @@ public:
 	* Constructor.
 	* Initialize member variables
 	*/
-    GameFile():
-		fileName(NULL)
-		{
-		
-	}
+    PatternFile():fileName(NULL){}
 	
     /** 
 	* Deconstructor.
 	*/
-    ~GameFile() {
-		free(file);
+    ~PatternFile() {
 		free(fileName);
 	};
-    
-	/** 
-	* Open filename.
-	*/
-    int open();
 	
 	/** 
 	* Parse file.
@@ -54,19 +44,27 @@ public:
 	}
 	
 	/**
+	* Get parsed pattern.
+	* @return pattern
+	*/
+	unsigned char * getPattern() {
+		return pattern;
+	}
+	
+	/**
 	* Get width of pattern.
-	* @return width
+	* @return patternSize[0]
 	*/
 	int getWidth() {
-		return width;
+		return patternSize[0];
 	}
 	
 	/**
 	* Get height of pattern.
-	* @return height
+	* @return patternSize[1]
 	*/
 	int getHeight() {
-		return height;
+		return patternSize[1];
 	}
 	
 private:
@@ -93,6 +91,19 @@ private:
 	* @return 0 on success and -1 on failure
 	*/
 	int parsePattern();
+	
+	/**
+	* Set the state of a cell.
+	* @param x x coordinate of cell
+	* @param y y coordinate of cell
+	* @param state new state of cell
+	*/
+	void setState(const int x, const int y, const unsigned char state) {
+		pattern[4*x + (4*patternSize[0]*y)] = state;
+		pattern[(4*x+1) + (4*patternSize[0]*y)] = state;
+		pattern[(4*x+2) + (4*patternSize[0]*y)] = state;
+		pattern[(4*x+3) + (4*patternSize[0]*y)] = 1;
+	}
 };
 
 #endif

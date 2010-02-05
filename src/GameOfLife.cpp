@@ -12,10 +12,14 @@ int GameOfLife::setup() {
 }
 
 int GameOfLife::setupHost() {
-	rowPitch = width*sizeof(char)*4;
-	imageSizeBytes = height*rowPitch;
-	origin[0]=0; origin[1]=0; origin[2]=0;
-	region[0]=width; region[1]=height; region[2]=1;
+	rowPitch = imageSize[0]*sizeof(char)*4;
+	imageSizeBytes = imageSize[1]*rowPitch;
+	origin[0]=0;
+	origin[1]=0;
+	origin[2]=0;
+	region[0]=imageSize[0];
+	region[1]=imageSize[1];
+	region[2]=1;
 	
 	imageA = (unsigned char *)malloc(imageSizeBytes);
 	if (imageA == NULL)
@@ -33,38 +37,35 @@ int GameOfLife::setupHost() {
 }
 
 int GameOfLife::spawnPopulation() {
-	if (spawnMode) {
+	if (spawnMode) {	/* Spawn population from file pattern */
 		/* Read population from file */
-		if (gameFile.open() != 0) {
-			cerr << "Cannot open file\n" << endl;
+		int status = patternFile.parse();
+		if (status != 0) {
+			switch (status) {
+				default: cerr << "Parse error\n" << endl; break;
+				case -2: cerr << "Cannot open file\n" << endl; break;
+			}
 			return -1;
 		}
-		if (gameFile.parse() != 0) {
-			cerr << "Parse error\n" << endl;
-			return -1;
-		}
-		cout << gameFile.getWidth() << "," << gameFile.getHeight() << endl;
-		
-		/* Spawn population from file */
+		/* Spawn parsed population */
 		return spawnStaticPopulation();
-	} else {
-		/* Spawn random population with given density */
+	} else {			/* Spawn random population with given density */
 		return spawnRandomPopulation();
 	}
 }
 
 int GameOfLife::spawnRandomPopulation() {
-	cout << "Spawning population for Game of Life with a chance of "
+	cout << "Spawning population with a density of "
 			<< population << "..." << endl << endl;
 	int random;
 	srand(time(NULL));
-	for (int x = 0; x < width; x++) {
-		for (int y = 0; y < height; y++) {
+	for (int x = 0; x < imageSize[0]; x++) {
+		for (int y = 0; y < imageSize[1]; y++) {
 			random = rand() % 100;
-			if ((float) random / 100.0f > population)
-				setState(x, y, DEAD, imageA);
-			else
+			if ((float)random / 100.0f < population)
 				setState(x, y, ALIVE, imageA);
+			else
+				setState(x, y, DEAD, imageA);
 		}
 	}
 	
@@ -72,13 +73,39 @@ int GameOfLife::spawnRandomPopulation() {
 }
 
 int GameOfLife::spawnStaticPopulation() {
-	for (int x = 0; x < width; x++) {
-		for (int y = 0; y < height; y++) {
-			setState(x, y, DEAD, imageA);
-		}
+	int patternWidth = patternFile.getWidth();
+	int patternHeight = patternFile.getHeight();
+	
+	/* Check if pattern fits into image */
+	if (imageSize[0] < patternWidth || imageSize[1] < patternHeight) {
+		cerr << "Size of pattern (" << patternWidth << "x" << patternHeight;
+		cerr << ") bigger than size of board (" << imageSize[0] << "x" << imageSize[1] << ") !" << endl;
+		return -1;
 	}
-	for (int x = 100; x < 110; x++) {
-		setState(x, 100, ALIVE, imageA);
+	
+	/* Spawn pattern in the center of the image */
+	int topLeft[2] = {imageSize[0]/2-patternWidth/2,
+					  imageSize[1]/2-patternHeight/2};
+	/* counter for copied pattern lines */
+	int copyLine = 0;
+	
+	for (int y = 0; y < imageSize[1]; y++) {
+		for (int x = 0; x < imageSize[0]; x++) {
+			
+			if (x == topLeft[0] && y >= topLeft[1]
+				&& y < (topLeft[1]+patternHeight)
+				) {
+				/* Insert pattern line by line into image */
+				memcpy(&(imageA[4*x + (4*imageSize[0]*y)]),
+				       &((patternFile.getPattern())[4*patternWidth*copyLine]),
+					   4*patternWidth*sizeof(char));
+				x += patternWidth;
+				copyLine++;
+			} else {
+				setState(x, y, DEAD, imageA);
+			}
+			
+		}
 	}
 	return 0;
 }
@@ -166,11 +193,11 @@ int GameOfLife::setupDevice(void) {
 	format.image_channel_data_type = CL_UNSIGNED_INT8;
 	// imageA		
 	deviceImageA = clCreateImage2D(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
-		&format, width, height, rowPitch, imageA, &status);
+		&format, imageSize[0], imageSize[1], rowPitch, imageA, &status);
 	assert(status == CL_SUCCESS);
 	// imageB
 	deviceImageB = clCreateImage2D(context, CL_MEM_READ_WRITE,
-		&format, width, height, 0, NULL, &status);
+		&format, imageSize[0], imageSize[1], 0, NULL, &status);
 	assert(status == CL_SUCCESS);
 	// test
 	if (test) {
@@ -231,13 +258,13 @@ int GameOfLife::setupDevice(void) {
 	size_t maxWorkGroupSize;
 	clGetDeviceInfo(devices[0], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), 
 					(void*)&maxWorkGroupSize, NULL);
-	localThreads[0] = 24;
-	localThreads[1] = 16;
+	localThreads[0] = 13;
+	localThreads[1] = 32;
 	assert(maxWorkGroupSize >= localThreads[0] * localThreads[1]);
-	int r1 = width % localThreads[0];
-	int r2 = height % localThreads[1];
-	globalThreads[0] = (r1 == 0) ? width : width + localThreads[0] - r1;
-	globalThreads[1] = (r2 == 0) ? height : height + localThreads[1] - r2;
+	int r1 = imageSize[0] % localThreads[0];
+	int r2 = imageSize[1] % localThreads[1];
+	globalThreads[0] = (r1 == 0) ? imageSize[0] : imageSize[0] + localThreads[0] - r1;
+	globalThreads[1] = (r2 == 0) ? imageSize[1] : imageSize[1] + localThreads[1] - r2;
 	
 	return 0;
 }
@@ -261,7 +288,6 @@ int GameOfLife::nextGenerationOpenCL(unsigned char* bufferImage) {
 	 * generation from device to host has finished
 	 */
 	do {
-	
 		/* Enqueue a kernel run call and wait for kernel to finish */
 		status = clEnqueueNDRangeKernel(commandQueue, kernel, 2, NULL,
 			globalThreads, localThreads, NULL, NULL, &kernelEvent);
@@ -361,8 +387,8 @@ int GameOfLife::nextGenerationCPU(unsigned char* bufferImage) {
 	#endif
 	
 	/* Calculate next generation for each pixel */
-	for (int x = 0; x < width; x++) {
-		for (int y = 0; y < height; y++) {
+	for (int x = 0; x < imageSize[0]; x++) {
+		for (int y = 0; y < imageSize[1]; y++) {
 			n = getNumberOfNeighbours(x, y, switchImages?imageA:imageB);
 			state = getState(x, y, switchImages?imageA:imageB);
 			
@@ -420,8 +446,8 @@ int GameOfLife::getNumberOfNeighbours(const int x, const int y, const unsigned c
 			neighbourCoord[0] = x + i;
 			neighbourCoord[1] = y + k;
 			if (!((i == 0) && (k == 0))
-				&& (neighbourCoord[0] < width)
-				&& (neighbourCoord[1] < height)
+				&& (neighbourCoord[0] < imageSize[0])
+				&& (neighbourCoord[1] < imageSize[1])
 				&& (x + i > 0) && (y + k > 0))
 				{
 				if (getState(neighbourCoord[0], neighbourCoord[1], image) == ALIVE)
