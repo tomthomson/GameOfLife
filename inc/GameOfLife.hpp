@@ -85,7 +85,7 @@ public:
 			imageSize[0] = 0;
 			imageSize[1] = 0;
 			
-			test = false;
+			test = true;
 			testSizeBytes = 60*sizeof(float);
 	}
 

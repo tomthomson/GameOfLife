@@ -154,7 +154,8 @@ void showControls() {
 void freeMem(void) {
 	GameOfLife.freeMem();
 	
-	glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, 0);
+	glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, 0);
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, 0);
 	if (glPBO)
 		glDeleteBuffers(1, &glPBO);
 	if (glTex)
@@ -280,7 +281,7 @@ void keyboard(unsigned char key, int mouseX, int mouseY) {
 		/* Pressing space starts/stops calculation of next generation */
 		case ' ':
 			GameOfLife.switchPause();
-			showControls();
+			//showControls();
 			break;
 		/* Pressing s switches single generation mode on/off */
 		case 's':
@@ -510,7 +511,7 @@ int main(int argc, char **argv) {
 		return -1;
 	
 	/* Show controls for Game of Life in console */
-	showControls();
+	//showControls();
 	
 	/* Setup OpenGL */
 	initDisplay(argc, argv);
