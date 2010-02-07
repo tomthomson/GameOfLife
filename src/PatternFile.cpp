@@ -104,9 +104,9 @@ bool PatternFile::parseHeader() {
 	if (c != ',') return false;
 	if (skipWhiteSpace() != 0) return false;
 	if (c != 'r') return false;
-	if (c=getc(file) != 'u') return false;
-	if (c=getc(file) != 'l') return false;
-	if (c=getc(file) != 'e') return false;
+	if ((c=getc(file)) != 'u') return false;
+	if ((c=getc(file)) != 'l') return false;
+	if ((c=getc(file)) != 'e') return false;
 	if (skipWhiteSpace() != 0) return false;
 	if (c != '=') return false;
 	if (skipWhiteSpace() != 0) return false;

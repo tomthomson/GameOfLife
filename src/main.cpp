@@ -428,9 +428,9 @@ int initGLUT(int argc, char *argv[]) {
 						GLUT_DEPTH  |		// depth buffer available
 						GLUT_RGBA   |		// color buffer with reg, green, blue, alpha
 						GLUT_ALPHA);
-	int windowHeight = glutGet(GLUT_SCREEN_HEIGHT)/2;
-	int windowWidth = windowHeight * (GameOfLife.getWidth()/
-	                                  GameOfLife.getHeight());
+	int windowHeight = (int)((float)glutGet(GLUT_SCREEN_HEIGHT)/2.0f);
+	int windowWidth = windowHeight * ((float)GameOfLife.getWidth()/
+	                                  (float)GameOfLife.getHeight());
 	// window size
 	glutInitWindowSize(windowWidth, windowHeight);
 	// window location
@@ -468,8 +468,6 @@ int initGLUT(int argc, char *argv[]) {
 void initOpenGL(void) {
 	/* Shading method: GL_SMOOTH or GL_FLAT */
 	glShadeModel(GL_SMOOTH);
-	
-	//glPixelStorei(GL_UNPACK_ROW_LENGTH, GameOfLife.getWidth());
 	
 	/* Hints */
 	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_FASTEST);
@@ -565,7 +563,7 @@ int main(int argc, char **argv) {
 	if(GameOfLife.setup()!=0) return -1;
 	
 	/* Show controls for Game of Life in console */
-	showControls();
+	//showControls();
 	
 	/* Setup OpenGL */
 	initDisplay(argc, argv);

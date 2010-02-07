@@ -64,14 +64,14 @@ int GameOfLife::readPopulation() {
 		/* Write new definitions */
 		char numChar[2];
 		humanRules.push_back('S');
-		for (int i = 0; i < survivalRules.size(); i++) {
+		for (unsigned int i = 0; i < survivalRules.size(); i++) {
 			rules[9+survivalRules.at(i)] = 255;
 			snprintf(numChar,2,"%i",survivalRules.at(i));
 			humanRules.push_back(numChar[0]);
 		}
 		humanRules.push_back('/');
 		humanRules.push_back('B');
-		for (int i = 0; i < birthRules.size(); i++) {
+		for (unsigned int i = 0; i < birthRules.size(); i++) {
 			rules[birthRules.at(i)] = 255;
 			snprintf(numChar,2,"%i",birthRules.at(i));
 			humanRules.push_back(numChar[0]);
@@ -398,10 +398,10 @@ int GameOfLife::nextGenerationOpenCL(unsigned char *bufferImage) {
 			
 			for (int i = 0; i < 20; i++)
 				cout << (i%10) << "|";
-			for (int i = 0; i < 60; i++) {
+			for (int i = 0; i < 11*20; i++) {
 				if (i%20==0)
 					cout << endl;
-				cout << testVec[i] << "|";
+				cout << (testVec[i]==0?' ':'X') << "|";
 			}
 			cout << endl << endl;
 		}

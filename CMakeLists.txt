@@ -26,6 +26,19 @@ include_directories(${OPENGL_INCLUDE_DIR})
 #include_directories(${GLEW_INCLUDE_DIR})
 
 ###
+# setting default target for building
+###
+IF(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+    set (CMAKE_BUILD_TYPE Release)
+ENDIF(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+message("Building for CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
+
+###
+# compiler flags
+###
+#SET(CMAKE_CXX_FLAGS_RELEASE "-DTPBX=30 -DTPBY=30 -O2 -g0")
+
+###
 # include source directories
 ###
 include_directories(src)

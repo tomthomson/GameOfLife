@@ -93,8 +93,8 @@ public:
 			imageSize[0] = 0;
 			imageSize[1] = 0;
 			
-			test = false;
-			testSizeBytes = 60*sizeof(float);
+			test = true;
+			testSizeBytes = 20*11*sizeof(float);
 	}
 	
 	/** 
@@ -309,8 +309,8 @@ public:
 	*/
 	int setRule(char *_rule) {
 		int counter = 0;
-		int delimiterPos = 0;
-		for (int i = 0; i < strlen(_rule); i++) {
+		unsigned int delimiterPos = 0;
+		for (unsigned int i = 0; i < strlen(_rule); i++) {
 			if (_rule[i] == '/') {
 				counter++;
 				delimiterPos = i;
@@ -329,7 +329,7 @@ public:
 		char numChar[2];
 		if (delimiterPos > 0) {
 			/* there is a survival definition */
-			for (int i = 0; i < delimiterPos; i++) {
+			for (unsigned int i = 0; i < delimiterPos; i++) {
 				int number = atoi(splitter.substr(i,1).c_str());
 				rules[9+(number==9?0:number)] = 255;
 				snprintf(numChar,2,"%i",number);
@@ -340,7 +340,7 @@ public:
 		humanRules.push_back('B');
 		if (delimiterPos < splitter.size()-1) {
 			/* there is a birth definition */
-			for (int i = delimiterPos+1; i < splitter.size(); i++) {
+			for (unsigned int i = delimiterPos+1; i < splitter.size(); i++) {
 				int number = atoi(splitter.substr(i,1).c_str());
 				rules[(number==9?0:number)] = 255;
 				snprintf(numChar,2,"%i",number);
