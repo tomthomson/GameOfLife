@@ -1,9 +1,10 @@
 #ifndef GAMEOFLIFE_H_
 #define GAMEOFLIFE_H_
 
-#include <string.h>
 #include <cstdio>
+#include <cstring>
 #include <iostream>
+#include <cmath>					/* for pow */
 #include <cassert>					/* for assert() */
 #include <ctime>					/* for time() */
 #include <cstdlib>					/* for srand() and rand() */
@@ -25,8 +26,10 @@
 
 class GameOfLife {
 private:
-	bool                 spawnMode;  /**< false:random mode and true:file mode */
-	unsigned char            rules;  /**< rules for calculating next generation */
+	bool                 spawnMode;  /**< false:random mode, true:file mode */
+	unsigned char           *rules;  /**< rules for calculating next generation */
+	size_t          rulesSizeBytes;  /**< size of rules in bytes */
+	std::string         humanRules;  /**< rules as an int, 9 separates survival/birth */
 	float               population;  /**< density of live cells when using random starting population */
 	PatternFile        patternFile;  /**< file when using static starting population */
 	unsigned char          *imageA;  /**< first image on the host */
@@ -56,6 +59,7 @@ private:
 	size_t                rowPitch;  /**< CL row pitch for image objects */
 	size_t               origin[3];  /**< CL offset for image operations */
 	size_t               region[3];  /**< CL region for image operations */
+	cl_mem             deviceRules;  /**< cL memory object for rules */
 	
 	float                 *testVec;
 	cl_mem                 testBuf;
@@ -69,7 +73,8 @@ public:
 	*/
 	GameOfLife():
 			spawnMode(false),
-			rules(0),
+			rules(NULL),
+			humanRules(""),
 			population(0.0f),
 			imageA(NULL),
 			imageB(NULL),
@@ -85,7 +90,7 @@ public:
 			imageSize[0] = 0;
 			imageSize[1] = 0;
 			
-			test = true;
+			test = false;
 			testSizeBytes = 60*sizeof(float);
 	}
 
@@ -140,6 +145,22 @@ public:
 	}
 	
 	/**
+	* Get spawn mode.
+	* @return spawnMode
+	*/
+	bool isFileMode() {
+		return spawnMode;
+	}
+	
+	/**
+	* Get rule used for calculating next generations.
+	* @return humanRules
+	*/
+	std::string getRule() {
+		return humanRules;
+	}
+	
+	/**
 	* Switch to CPU/OpenCL mode
 	*/
 	void switchCPUMode() {
@@ -184,6 +205,13 @@ public:
 	*/
 	void switchreadSync() {
 		readSync==CL_TRUE?readSync=CL_FALSE:readSync=CL_TRUE;
+	}
+	
+	/**
+	* Reset the board to the starting population
+	*/
+	void reset() {
+		
 	}
 	
 	/**
@@ -277,9 +305,58 @@ public:
 		imageSize[0] = _width;
 		imageSize[1] = _height;
 	}
+	
+	/**
+	* Set the rule for calculating next generations.
+	* @param _rule rule as an array of characters
+	*/
+	int setRule(char *_rule) {
+		int counter = 0;
+		int delimiterPos = 0;
+		for (int i = 0; i < strlen(_rule); i++) {
+			if (_rule[i] == '/') {
+				counter++;
+				delimiterPos = i;
+			}
+		}
+		if (counter != 1) return -1;	/* Only 1 delimiter allowed */
+		
+		/* Allocate space for rules and set to default value 0 */
+		rulesSizeBytes = 18*sizeof(char);
+		rules = (unsigned char*)malloc(rulesSizeBytes);
+		memset(rules,0,18);
+		
+		/* Split up rule in survival and birth */
+		std::string splitter(_rule);
+		humanRules.push_back('S');
+		char numChar[2];
+		if (delimiterPos > 0) {
+			/* there is a survival definition */
+			for (int i = 0; i < delimiterPos; i++) {
+				int number = atoi(splitter.substr(i,1).c_str());
+				rules[9+(number==9?0:number)] = 255;
+				snprintf(numChar,2,"%i",number);
+				humanRules.push_back(numChar[0]);
+			}
+		}
+		
+		humanRules.push_back('/');
+		humanRules.push_back('B');
+		
+		if (delimiterPos < splitter.size()-1) {
+			/* there is a birth definition */
+			for (int i = delimiterPos+1; i < splitter.size(); i++) {
+				int number = atoi(splitter.substr(i,1).c_str());
+				rules[(number==9?0:number)] = 255;
+				snprintf(numChar,2,"%i",number);
+				humanRules.push_back(numChar[0]);
+			}
+		}
+		
+		return 0;
+	}
 
 private:
-
 	/**
 	* Host initialisations.
 	* Allocate and initialize host image
