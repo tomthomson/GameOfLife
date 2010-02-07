@@ -21,6 +21,10 @@ int GameOfLife::setupHost() {
 	region[1]=imageSize[1];
 	region[2]=1;
 	
+	startingImage = (unsigned char *)malloc(imageSizeBytes);
+	if (startingImage == NULL)
+		return -1;
+	
 	imageA = (unsigned char *)malloc(imageSizeBytes);
 	if (imageA == NULL)
 		return -1;
@@ -28,26 +32,57 @@ int GameOfLife::setupHost() {
 	imageB = (unsigned char *)malloc(imageSizeBytes);
 	if (imageB == NULL)
 		return -1;
-
+		
+	/* Read population from file */
+	if (spawnMode && readPopulation() != 0) return -1;
+	
 	/* Spawn initial population */
-	if (spawnPopulation() != 0)
-		return -1;
+	if (spawnPopulation() != 0) return -1;
 
+	return 0;
+}
+
+int GameOfLife::readPopulation() {
+	/* Parse file */
+	int status = patternFile.parse();
+	if (status != 0) {
+		switch (status) {
+			default: cerr << "Pattern file parse error\n" << endl; break;
+			case -2: cerr << "Cannot open file\n" << endl; break;
+		}
+		return -1;
+	}
+	
+	/* Overwrite rule if specified in file, else skip */
+	vector<int> birthRules = patternFile.getBirthRules();
+	vector<int> survivalRules = patternFile.getSurvivalRules();
+	if (birthRules.size() > 0 && survivalRules.size() > 0) {
+		/* Reset rule definitions */
+		memset(rules,0,18);
+		humanRules.clear();
+		
+		/* Write new definitions */
+		char numChar[2];
+		humanRules.push_back('S');
+		for (int i = 0; i < survivalRules.size(); i++) {
+			rules[9+survivalRules.at(i)] = 255;
+			snprintf(numChar,2,"%i",survivalRules.at(i));
+			humanRules.push_back(numChar[0]);
+		}
+		humanRules.push_back('/');
+		humanRules.push_back('B');
+		for (int i = 0; i < birthRules.size(); i++) {
+			rules[birthRules.at(i)] = 255;
+			snprintf(numChar,2,"%i",birthRules.at(i));
+			humanRules.push_back(numChar[0]);
+		}
+	}
+	
 	return 0;
 }
 
 int GameOfLife::spawnPopulation() {
 	if (spawnMode) {	/* Spawn population from file pattern */
-		/* Read population from file */
-		int status = patternFile.parse();
-		if (status != 0) {
-			switch (status) {
-				default: cerr << "Parse error\n" << endl; break;
-				case -2: cerr << "Cannot open file\n" << endl; break;
-			}
-			return -1;
-		}
-		/* Spawn parsed population */
 		return spawnStaticPopulation();
 	} else {			/* Spawn random population with given density */
 		return spawnRandomPopulation();
@@ -61,11 +96,13 @@ int GameOfLife::spawnRandomPopulation() {
 		for (int y = 0; y < imageSize[1]; y++) {
 			random = rand() % 100;
 			if ((float)random / 100.0f < population)
-				setState(x, y, ALIVE, imageA);
+				setState(x, y, ALIVE, startingImage);
 			else
-				setState(x, y, DEAD, imageA);
+				setState(x, y, DEAD, startingImage);
 		}
 	}
+	
+	memcpy(imageA, startingImage, imageSizeBytes);
 	
 	return 0;
 }
@@ -94,17 +131,20 @@ int GameOfLife::spawnStaticPopulation() {
 				&& y < (topLeft[1]+patternHeight)
 				) {
 				/* Insert pattern line by line into image */
-				memcpy(&(imageA[4*x + (4*imageSize[0]*y)]),
+				memcpy(&(startingImage[4*x + (4*imageSize[0]*y)]),
 				       &((patternFile.getPattern())[4*patternWidth*copyLine]),
 					   4*patternWidth*sizeof(char));
 				x += patternWidth;
 				copyLine++;
 			} else {
-				setState(x, y, DEAD, imageA);
+				setState(x, y, DEAD, startingImage);
 			}
 			
 		}
 	}
+	
+	memcpy(imageA, startingImage, imageSizeBytes);
+	
 	return 0;
 }
 
@@ -277,14 +317,14 @@ int GameOfLife::setupDevice(void) {
 	return 0;
 }
 
-int GameOfLife::nextGeneration(unsigned char* bufferImage) {
+int GameOfLife::nextGeneration(unsigned char *bufferImage) {
 	if (CPUMode)
 		return nextGenerationCPU(bufferImage);
 	else
 		return nextGenerationOpenCL(bufferImage);
 }
 
-int GameOfLife::nextGenerationOpenCL(unsigned char* bufferImage) {
+int GameOfLife::nextGenerationOpenCL(unsigned char *bufferImage) {
 	cl_int status = CL_SUCCESS;
 	cl_event kernelEvent = NULL;
 	cl_event copyEvent = NULL;
@@ -376,7 +416,7 @@ int GameOfLife::nextGenerationOpenCL(unsigned char* bufferImage) {
 	return 0;
 }
 
-int GameOfLife::nextGenerationCPU(unsigned char* bufferImage) {
+int GameOfLife::nextGenerationCPU(unsigned char *bufferImage) {
 	int n;
 	unsigned char state;
 	
@@ -470,6 +510,27 @@ int GameOfLife::getNumberOfNeighbours(const int x, const int y, const unsigned c
 	return counter;
 }
 
+int GameOfLife::resetGame(unsigned char *bufferImage) {
+	/* Reset host */
+	memcpy(imageA, startingImage, imageSizeBytes);
+	generations = 0;
+	generationsPerCopyEvent = 0;
+	executionTime = 0.0f;
+	/* Reset device */
+	cl_int status = clEnqueueWriteImage(commandQueue,
+						deviceImageA, CL_TRUE, origin, region, rowPitch, 0,
+						startingImage, NULL, NULL, NULL);
+	status |= clSetKernelArg(kernel, 0, sizeof(cl_mem),(void *)&deviceImageA);
+	status |= clSetKernelArg(kernel, 1, sizeof(cl_mem),(void *)&deviceImageB);
+	assert(status == CL_SUCCESS);
+	
+	/* Update OpenGL buffer image */
+	memcpy(bufferImage, startingImage, imageSizeBytes);
+	
+	switchImages = true;
+	return 0;
+}
+
 int GameOfLife::freeMem() {
 	/* Releases OpenCL resources */
 	cl_int status = CL_SUCCESS;
@@ -507,6 +568,8 @@ int GameOfLife::freeMem() {
 	}
 
 	/* Release host resources */
+	if (startingImage)
+		free(startingImage);
 	if (imageA)
 		free(imageA);
 	if (imageB)

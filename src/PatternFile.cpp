@@ -7,7 +7,7 @@ int PatternFile::parse() {
 		return -2;
 	
 	int c;					/* character read from file */
-	bool noHeader = false;  /* header specified */
+	bool header = true;  /* header specified */
 	
 	/* Skip leading comment lines */
 	for (;;) {
@@ -33,19 +33,16 @@ int PatternFile::parse() {
 	/* Skip whitespaces */
 	if (skipWhiteSpace() != 0) return -1;
 	
-	/* Check for header line and parse it */
-	noHeader = parseHeader();
-
-	if (noHeader)
-		return -1;
+	/* Check for header line and parse it, abort when there is no header */
+	header = parseHeader();
+	if (!header) return -1;
 		
-	/* Allocate space for pattern according to specified patternSize[0] and patternSize[1] */
+	/* Allocate space for pattern according to specified width and height of pattern */
 	patternSizeBytes = 4*patternSize[0]*patternSize[1]*sizeof(char);
 	pattern = (unsigned char *)malloc(patternSizeBytes);
 	
 	/* Parse pattern */
-	if (parsePattern() != 0)
-		return -1;
+	if (parsePattern() != 0) return -1;
 		
 	/* Close pattern file */
 	fclose(file);
@@ -54,7 +51,7 @@ int PatternFile::parse() {
 }
 
 int PatternFile::skipWhiteSpace() {
-	while ((c = getc(file)) == ' ' || c == '\t' || c == '\n' || c == EOF || c == 10) {
+	while ((c = getc(file)) == ' ' || c == '\t' || c == 13 || c == 10 || c == EOF) {
 		if (c == EOF)
 			return -1;
 	}
@@ -75,46 +72,89 @@ int PatternFile::getNumber() {
 
 bool PatternFile::parseHeader() {
 	int number = 0;
-	if (c != 'x') {
-	/* no header line is supplied */
-		return true;
-	}
+	/* Check for header line */
+	if (c != 'x') return false;
 	
-	/* header line is supplied */
-	if (skipWhiteSpace() != 0) return -1;
+	/* Header line is supplied */
+	if (skipWhiteSpace() != 0) return false;
 	
 	if (c != '=') return true;
-	if (skipWhiteSpace() != 0) return -1;
+	if (skipWhiteSpace() != 0) return false;
 	
 	/* Get width */
 	number = getNumber();
-	if (number == 0) {
-		return true;
-	} else {
-		patternSize[0] = number;
-	}
-	if (skipWhiteSpace() != 0) return -1;
-	if (c != ',') return -1;
-	if (skipWhiteSpace() != 0) return -1;
-	if (c != 'y') return -1;
-	if (skipWhiteSpace() != 0) return -1;
-	if (c != '=') return true;
-	if (skipWhiteSpace() != 0) return -1;
+	if (number == 0) return false;
+	else patternSize[0] = number;
+	
+	if (skipWhiteSpace() != 0) return false;
+	if (c != ',') return false;
+	if (skipWhiteSpace() != 0) return false;
+	if (c != 'y') return false;
+	if (skipWhiteSpace() != 0) return false;
+	if (c != '=') return false;
+	if (skipWhiteSpace() != 0) return false;
 	
 	/* Get height */
 	number = getNumber();
-	if (number == 0) {
-		return true;
-	} else {
-		patternSize[1] = number;
+	if (number == 0) return false;
+	else patternSize[1] = number;
+	
+	/* Get rule definition */
+	if (skipWhiteSpace() != 0) return false;
+	if (c != ',') return false;
+	if (skipWhiteSpace() != 0) return false;
+	if (c != 'r') return false;
+	if (c=getc(file) != 'u') return false;
+	if (c=getc(file) != 'l') return false;
+	if (c=getc(file) != 'e') return false;
+	if (skipWhiteSpace() != 0) return false;
+	if (c != '=') return false;
+	if (skipWhiteSpace() != 0) return false;
+	
+	/*
+	 * If there is no B then assume there is no rule definition
+	 * Use default Conway rule B3/S23
+	 */
+	if (c != 'B') return true;
+	
+	/* Get rules for birth of a dead cell */
+	while ((c = getc(file)) != '/') {
+		switch (c) {
+		default:
+			if (c >= '0' && c <= '8') {
+				birthRules.push_back((int)c-(int)'0');
+				break;
+			} else {		/* other characters are not allowed */
+				return -1;
+			}
+		case ' ':			/* whitespaces are not allowed */
+		case '\t':
+		case 13:
+		case 10:
+		case EOF:			/* end of file is not allowed */
+			return true;
+		}
 	}
 	
-	/* Skip rule definition: assume Conway's rule */
-	while ((c = getc(file)) != EOF && c != '\n');
-	if (c == EOF)
-		return true;
+	if (skipWhiteSpace() != 0) return -1;
+	if (c != 'S') return true;
 	
-	return false;
+	/* Get rules for survival of a live cell */
+	while ((c = getc(file)) != ' ' && c != '\t' && c != 13 && c != 10) {
+		switch (c) {
+		default:
+			if (c >= '0' && c <= '8') {
+				survivalRules.push_back((int)c-(int)'0');
+				break;
+			} else {		/* other characters are not allowed */
+				return -1;
+			}
+		case EOF:			/* end of file is not allowed */
+			return true;
+		}
+	}
+	
+	return true;
 }
 
 int PatternFile::parsePattern() {

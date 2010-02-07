@@ -22,7 +22,7 @@
 #include <sstream>
 #include <iomanip>
 #include <string>
-#include "anyoption.h"	/* for command line parsing */
+#include <unistd.h>		/* for command line parsing */
 
 #include "../inc/GameOfLife.hpp"
 
@@ -49,6 +49,7 @@ float verticalMove, horizontalMove;
 float clampZoom = 1.0f;
 float clampMove = 0.0f;
 bool drawGrid = false;
+bool resetGame = false;
 GLfloat gridControlPoints[2][2][3] = {
 		{{-1.0, -1.0, 0.0}, {1.0, -1.0, 0.0}},
 		{{-1.0, 1.0, 0.0}, {1.0, 1.0, 0.0}}
@@ -61,71 +62,96 @@ static const char *shaderCode =		/* glShader for displaying floating-point textu
 /********************************************
 *            Global functions
 *********************************************/
-/* Setup command line parser */
-void setupCommandlineParser(AnyOption *opt) {
-	/* Set usage/help */
-	opt->addUsage( "Usage: GameOfLife -f PATH [-l RULE] WIDTH [HEIGHT] " );
-	opt->addUsage( "  or:  GameOfLife -r DENSITY [-l RULE] WIDTH [HEIGHT]" );
-	opt->addUsage( "" );
-	opt->addUsage( "Mandatory arguments to long options are mandatory for short options too.");
-	opt->addUsage( " -h  --help  	       Prints this help " );
-	opt->addUsage( " -f  --file PATH       Path to filename used for starting population");
-	opt->addUsage( " -r  --random DENSITY  Use random starting population with given density");
-	opt->addUsage( " -l  --rule RULE       rule for next generations as a list of Survival/Birth");
-	opt->addUsage( "                       default: 23/3");
-	opt->addUsage( "                       defintion is overwritten when there is a");
-	opt->addUsage( "                       rule specified in the file");
-	opt->addUsage( "" );
-
-	/* Set the option string/characters */
-	/* by default all options will be checked on the command line */
-	opt->setCommandFlag("help",'h');
-	opt->setCommandOption("file",'f');
-	opt->setCommandOption("random",'r');
-	opt->setCommandOption("rule",'l');
+/* Print command line help */
+void showHelp() {
+	printf( "\n" );
+	printf( "Usage: GameOfLife -f PATH [-l RULE] WIDTH [HEIGHT]\n");
+	printf( "  or:  GameOfLife -r DENSITY [-l RULE] WIDTH [HEIGHT]\n");
+	printf( "\n" );
+	printf( "Mandatory arguments to long options are mandatory for short options too.\n");
+	printf( " -h            Prints this help\n");
+	printf( " -f FILE       Path to RLE-file used for starting population\n");
+	printf( " -r DENSITY    Use random starting population with given density\n");
+	printf( " -l RULE       rule for next generations as a list of Survival/Birth\n");
+	printf( "               default: 23/3\n");
+	printf( "               defintion is overwritten when there is a\n");
+	printf( "               rule specified in the file\n");
+	printf( "\n" );
 }
 
 /* Read commandline arguments */
-int readArguments(AnyOption *opt, int argc, char *argv[]) {
-	/* Go through the command line and get the options */
-    opt->processCommandArgs(argc,argv);
+int readArguments(int argc, char **argv) {
 	
-	/* Print usage if help needed */
-	if (opt->getFlag("help") || opt->getFlag('h')) {
-		return -1;
-	}
+	int optionChar;
+	int fSet=0, rSet=0, lSet=0;
+	extern char *optarg;
+	extern int optind, optopt;
 	
-	/* Get file or random population */
-	if (opt->getValue("file") != NULL || opt->getValue('f') != NULL) {
-		GameOfLife.setFilename(opt->getValue('f'));
-	} else if (atof(opt->getValue("random")) != 0.0f || atof(opt->getValue('r')) != 0.0f) {
-		GameOfLife.setPopulation(atof(opt->getValue('r')));
-	} else {
-		return -1;
-	}
-	
-	/* Get rule */
-	int rule = 0;
-	if (opt->getValue("rule") != NULL || opt->getValue('l') != NULL) {
-		if (GameOfLife.setRule(opt->getValue('l')) != 0) {
-			cerr << "Error in rule definition" << endl;
+	while ((optionChar = getopt(argc, argv, ":hf:l:r:")) != -1) {
+		switch (optionChar) {
+		case 'f':			/* Set filename */
+			if (rSet) {
+				fprintf(stderr,"-f and -l are mutually-exclusive\n");
+				return -1;
+			} else {
+				GameOfLife.setFilename(optarg);
+				fSet++;
+			}
+			break;
+		case 'r':			/* Set density for random mode */
+			if (fSet) {
+				fprintf(stderr,"-f and -l are mutually-exclusive\n");
+				return -1;
+			} else {
+				if (atof(optarg) <= 0.0f) {
+					fprintf(stderr,"Error in density\n");
+					return -1;
+				}
+				GameOfLife.setPopulation(atof(optarg));
+				rSet++;
+			}
+			break;
+		case 'l':			/* Set rule */
+			if (GameOfLife.setRule(optarg) != 0) {
+				fprintf(stderr,"Error in rule definition\n");
+				return -1;
+			} else {
+				lSet = 2;
+			}
+			break;
+		case 'h':
+			return -1;
+		case ':':			/* -f -l -r without operand */
+			fprintf(stderr,"Option -%c requires an operand\n", optopt);
+			return -1;
+		case '?':
+			fprintf(stderr,"Unrecognized option: -%c\n", optopt);
 			return -1;
 		}
-		rule = 2;
-	} else {
+	}
+	
+	if (fSet == 0 && rSet == 0) {
+		fprintf(stderr,"No spawn mode specified\n");
+		return -1;
+	}
+	if (lSet == 0) {
 		char defaultRule[] = "23/3";
 		GameOfLife.setRule(defaultRule);
 	}
 	
 	/* Get width and height */
-	if ((unsigned int)argc == 4+rule)
-		GameOfLife.setSize(atoi(argv[3+rule]),atoi(argv[3+rule]));
-	else if ((unsigned int)argc == 5+rule)
-		GameOfLife.setSize(atoi(argv[3+rule]),atoi(argv[3+rule]));
-	else
+	switch (argc-optind) {
+	case 1:
+		GameOfLife.setSize(atoi(argv[optind]),atoi(argv[optind]));
+		break;
+	case 2:
+		GameOfLife.setSize(atoi(argv[optind]),atoi(argv[optind+1]));
+		break;
+	default:
+		fprintf(stderr,"No width and/or height specified\n");
 		return -1;
+	}
 	
-	delete opt;
 	return 0;
 }
 
@@ -152,22 +178,21 @@ void showControls() {
 	printf("------|-------|------------\n");
 	printf("space | %s | start/stop calculation of next generation\n",
 					GameOfLife.isPaused() ? "stop " : "start");
-	printf("  g   | %s | draw grid for board\n",
-					drawGrid ? " on  " : " off ");
-	printf("  s   | %s | stop after calculation of every generation\n",
-					GameOfLife.isSingleGeneration() ? " yes " : " no  ");
 	printf("  a   | %s | read image of next generation asynchronously \n",
-					GameOfLife.isReadSync() ? "sync " : "async");
+					GameOfLife.isReadSync() ? " sync" : "async");
 	printf("  c   | %s | calculate next generation with CPU/OpenCL \n",
 					GameOfLife.isCPUMode() ? " CPU " : " CL  ");
-	printf("  r   |       | reset to starting population \n");
+	printf("  g   | %s | draw grid for board\n",
+					drawGrid ? " on  " : " off ");
+	printf("  r   | %s | resets to starting population on the next stop \n",
+					resetGame ? " on  " : " off ");
+	printf("  s   | %s | stop after calculation of every generation\n",
+					GameOfLife.isSingleGeneration() ? " yes " : " no  ");
 	printf("q/esc |       | quit\n\n");
 }
 
-/* Free host/device memory */
+/* Free host memory */
 void freeMem(void) {
-	GameOfLife.freeMem();
-	
 	if (glPBO) {
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, glPBO);
 		glDeleteBuffers(1, &glPBO);
@@ -188,12 +213,12 @@ void freeMem(void) {
 /********************************************
 *         GLUT callback functions
 *********************************************/
-/* Display function */
-void display() {
+/* functions which change the board before displaying it */
+void displayFunctions() {
+	if(!GameOfLife.isPaused()) {
 	/*
 	 * Calculate next generation if game is not paused
 	 */
-	if(!GameOfLife.isPaused()) {
 		/*
 		 * Map buffer to host memory space
 		 * and return address of buffer in host address space
@@ -208,10 +233,36 @@ void display() {
 			/* Release the mapped buffer */
 			glUnmapBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB);
 			
-			if (state != 0)
-				exit(0);
+			if (state != 0) exit(-1);
 		}
+	} else if (GameOfLife.isPaused() && resetGame) {
+	/*
+	 * Reset game if game is paused and not in edit mode
+	 */
+		GLubyte* bufferImage =
+				(GLubyte *)glMapBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, GL_WRITE_ONLY_ARB);
+		
+		if (bufferImage) {
+		  	/* Write image of next generation directly on the mapped buffer */
+			int state = GameOfLife.resetGame(bufferImage);
+			
+			/* Release the mapped buffer */
+			glUnmapBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB);
+			
+			if (state != 0) exit(-1);
+		}
+		
+		resetGame = false;
+		showControls();
 	}
+}
+
+/* Display function */
+void display() {
+	/*
+	 * Execute functions which change the board
+	 */
+	displayFunctions();
 	
 	/*
 	 * Draw GameOfLife image/board
@@ -264,8 +315,9 @@ void display() {
 		glMapGrid2f(GameOfLife.getWidth(), 0.0, 1.0, GameOfLife.getHeight(), 0.0, 1.0);
 		
 		glEvalMesh2(GL_LINE,
-			0, GameOfLife.getWidth(),	/* Starting at 0 mesh GameOfLife.getWidth() steps. */
-			0, GameOfLife.getHeight());	/* Starting at 0 mesh GameOfLife.getHeight() steps. */
+			0, GameOfLife.getWidth(),	/* Starting at 0 mesh width steps. */
+			0, GameOfLife.getHeight());	/* Starting at 0 mesh height steps. */
+		glDisable(GL_MAP2_VERTEX_3);
 	}
 	
 	glPopMatrix();
@@ -273,12 +325,10 @@ void display() {
 	glutSwapBuffers();
 	glutReportErrors();
 
-	/* Append execution time of one generation to window title */
+	/* Append execution information to window title */
 	char title[64];
-	char mode[10];
-	GameOfLife.getExecutionMode(mode);
 	sprintf(title, "Game of Life @ %s @ %f ms/gen @ %i gens/copy @ generation %u",
-					mode,
+					GameOfLife.isCPUMode() ? "CPU" : "OpenCL",
 					GameOfLife.getExecutionTime(),
 					GameOfLife.getGenerationsPerCopyEvent(),
 					GameOfLife.getGenerations()
@@ -287,50 +337,31 @@ void display() {
 }
 
 /* Idle function */
-void idle(void) {
-	glutPostRedisplay();
-}
+void idle(void) { glutPostRedisplay(); }
 
 /* Keyboard function */
 void keyboard(unsigned char key, int mouseX, int mouseY) {
 	switch(key) {
-		/* Pressing c switches CPU mode on/off */
-		case 'c':
-			GameOfLife.switchCPUMode();
-			showControls();
-			break;
 		/* Pressing space starts/stops calculation of next generation */
-		case ' ':
-			GameOfLife.switchPause();
-			showControls();
-			break;
-		/* Pressing s switches single generation mode on/off */
-		case 's':
-			GameOfLife.switchSingleGeneration();
-			showControls();
-			break;
-		/* Pressing g switches grid for Game of Life board on/off */
-		case 'g':
-			drawGrid = !drawGrid;
-			showControls();
-			break;
+		case ' ': GameOfLife.switchPause(); break;
 		/* Pressing a switches synchronous reading of images on/off */
-		case 'a':
-			GameOfLife.switchreadSync();
-			showControls();
-			break;
+		case 'a': GameOfLife.switchreadSync(); break;
+		/* Pressing c switches CPU mode on/off */
+		case 'c': GameOfLife.switchCPUMode(); break;
+		/* Pressing g switches grid for Game of Life board on/off */
+		case 'g': drawGrid = !drawGrid; break;
 		/* Pressing r resets the board to the starting population */
-		case 'r':
-			GameOfLife.reset();
-			break;
+		case 'r': resetGame = !resetGame; break;
+		/* Pressing s switches single generation mode on/off */
+		case 's': GameOfLife.switchSingleGeneration(); break;
 		/* Pressing escape or q exits */
 		case 27:
 		case 'q':
 		case 'Q':
 			exit(0);
-		default:
-			break;
+		default: break;
 	}
+	showControls();
 }
 
 /* Reshape function */
@@ -524,19 +555,12 @@ int main(int argc, char **argv) {
 	/* Register exit function */
 	atexit(freeMem);
 	
-	/* Create an instance of command line parser */
-	AnyOption *opt = new AnyOption();
-	
-	/* Setup command line parser */
-	setupCommandlineParser(opt);
-	
 	/* Read command line arguments */
-	if (readArguments(opt, argc, argv) != 0) {
-		opt->printUsage();
-	    delete opt;
+	if (readArguments(argc, argv) != 0) {
+		showHelp();
 		return -1;
 	}
-
+	
 	/* Setup host/device memory, starting population and OpenCL */
 	if(GameOfLife.setup()!=0) return -1;
 	

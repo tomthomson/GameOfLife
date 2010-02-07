@@ -4,30 +4,31 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <vector>
 #include <iostream>
 
 class PatternFile {
 private:
-	FILE               *file;  /**< FILE for population */
-	char           *fileName;  /**< filename for file */
-	unsigned char   *pattern;  /**< parsed pattern */
-	size_t  patternSizeBytes;  /**< size of pattern in bytes */
-	int       patternSize[2];  /**< width and height of specified pattern */
-	int                    c;  /**< current character being read */
+	FILE                       *file;  /**< FILE for population */
+	char                   *fileName;  /**< filename for file */
+	unsigned char           *pattern;  /**< parsed pattern */
+	int               patternSize[2];  /**< width and height of specified pattern */
+	size_t          patternSizeBytes;  /**< size of pattern in bytes */
+	std::vector<int>      birthRules;  /**< list of number of neighbours for cell birth */
+	std::vector<int>   survivalRules;  /**< list of number of neighbours for cell survival */
+	int                            c;  /**< current character being read */
 
 public:
 	/** 
 	* Constructor.
 	* Initialize member variables
 	*/
-    PatternFile():fileName(NULL){}
+    PatternFile() { fileName = NULL; }
 	
     /** 
 	* Deconstructor.
 	*/
-    ~PatternFile() {
-		free(fileName);
-	};
+    ~PatternFile() { free(fileName); }
 	
 	/** 
 	* Parse file.
@@ -39,8 +40,8 @@ public:
 	* @param _fileName path to fileName
 	*/
     void setFilename(char *_fileName) {
-		fileName = (char *)malloc(strlen(_fileName));
-		memcpy(fileName, _fileName, strlen(_fileName));
+		fileName = (char*)malloc(sizeof(char)*strlen(_fileName)+1);
+		memcpy(fileName,_fileName,sizeof(char)*strlen(_fileName)+1);
 	}
 	
 	/**
@@ -49,6 +50,22 @@ public:
 	*/
 	unsigned char * getPattern() {
 		return pattern;
+	}
+	
+	/**
+	* Get rules for birth of a dead cell.
+	* @return birthRules
+	*/
+	std::vector<int> getBirthRules() {
+		return birthRules;
+	}
+	
+	/**
+	* Get rules for birth of a dead cell.
+	* @return survivalRules
+	*/
+	std::vector<int> getSurvivalRules() {
+		return survivalRules;
 	}
 	
 	/**
@@ -70,7 +87,7 @@ public:
 private:
 	/** 
 	* Skips whitespaces of file
-	* @return if EOF found -1, else 0
+	* @return -1 if EOF found, else 0
 	*/
 	int skipWhiteSpace();
 	
@@ -82,7 +99,7 @@ private:
 	
 	/** 
 	* Parse the header if specified
-	* @return noHeader
+	* @return true if there is a header, else false
 	*/
 	bool parseHeader();
 	

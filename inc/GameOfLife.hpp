@@ -4,10 +4,11 @@
 #include <cstdio>
 #include <cstring>
 #include <iostream>
-#include <cmath>					/* for pow */
+#include <vector>
 #include <cassert>					/* for assert() */
 #include <ctime>					/* for time() */
 #include <cstdlib>					/* for srand() and rand() */
+#include <cmath>					/* for pow */
 #ifdef WIN32					// Windows system specific
 	#include <windows.h>			/* for QueryPerformanceCounter */
 #else							// Unix based system specific
@@ -32,6 +33,7 @@ private:
 	std::string         humanRules;  /**< rules as an int, 9 separates survival/birth */
 	float               population;  /**< density of live cells when using random starting population */
 	PatternFile        patternFile;  /**< file when using static starting population */
+	unsigned char   *startingImage;  /**< image of starting population */
 	unsigned char          *imageA;  /**< first image on the host */
 	unsigned char          *imageB;  /**< second image on the host */
 	int               imageSize[2];  /**< width and height of image */
@@ -76,6 +78,7 @@ public:
 			rules(NULL),
 			humanRules(""),
 			population(0.0f),
+			startingImage(NULL),
 			imageA(NULL),
 			imageB(NULL),
 			generations(0),
@@ -93,6 +96,12 @@ public:
 			test = false;
 			testSizeBytes = 60*sizeof(float);
 	}
+	
+	/** 
+	* DeConstructor.
+	* Cleanup host and device memory
+	*/
+	~GameOfLife() { freeMem(); }
 
 	/**
 	* Setup host/device memory and OpenCL.
@@ -105,7 +114,13 @@ public:
 	* @return 0 on success and -1 on failure
 	*/
 	int nextGeneration(unsigned char* bufferImage);
-
+	
+	/**
+	* Reset the board to the starting population.
+	* @return 0 on success and -1 on failure
+	*/
+	int resetGame(unsigned char *bufferImage);
+	
 	/**
 	* Free memory.
 	* @return 0 on success and -1 on failure
@@ -205,24 +220,6 @@ public:
 	*/
 	void switchreadSync() {
 		readSync==CL_TRUE?readSync=CL_FALSE:readSync=CL_TRUE;
-	}
-	
-	/**
-	* Reset the board to the starting population
-	*/
-	void reset() {
-		
-	}
-	
-	/**
-	* Get mode for calculating next generations.
-	* @param mode execution mode as a string
-	*/
-	void getExecutionMode(char *mode) {
-		if (CPUMode)
-			sprintf(mode,"CPU");
-		else
-			sprintf(mode,"OpenCL");
 	}
 	
 	/**
@@ -339,10 +336,8 @@ public:
 				humanRules.push_back(numChar[0]);
 			}
 		}
-		
 		humanRules.push_back('/');
 		humanRules.push_back('B');
-		
 		if (delimiterPos < splitter.size()-1) {
 			/* there is a birth definition */
 			for (int i = delimiterPos+1; i < splitter.size(); i++) {
@@ -372,6 +367,11 @@ private:
 	* @return 0 on success and -1 on failure
 	*/
 	int setupDevice();
+	
+	/**
+	* Read initial population from file.
+	*/
+	int readPopulation();
 
 	/**
 	* Spawn initial population.
