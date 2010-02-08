@@ -2,8 +2,8 @@
 #define PATTERNFILE_HPP_
 
 #include <cstdio>
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
 #include <vector>
 #include <iostream>
 
@@ -23,12 +23,14 @@ public:
 	* Constructor.
 	* Initialize member variables
 	*/
-    PatternFile() { fileName = NULL; }
+    PatternFile():fileName(NULL) {}
 	
     /** 
 	* Deconstructor.
 	*/
-    ~PatternFile() { free(fileName); }
+    ~PatternFile() {
+		free(fileName);
+	}
 	
 	/** 
 	* Parse file.

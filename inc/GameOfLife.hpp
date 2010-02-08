@@ -2,13 +2,12 @@
 #define GAMEOFLIFE_H_
 
 #include <cstdio>
-#include <cstring>
 #include <iostream>
+#include <cstring>
 #include <vector>
 #include <cassert>					/* for assert() */
 #include <ctime>					/* for time() */
 #include <cstdlib>					/* for srand() and rand() */
-#include <cmath>					/* for pow */
 #ifdef WIN32					// Windows system specific
 	#include <windows.h>			/* for QueryPerformanceCounter */
 #else							// Unix based system specific
@@ -24,6 +23,13 @@
 */
 #define ALIVE 255
 #define DEAD 0
+
+inline unsigned int countDigits(unsigned int x) {
+	unsigned count=1;
+	unsigned int value= 10;
+	while (x>=value) { value*=10; count++; }
+	return count;
+}
 
 class GameOfLife {
 private:
@@ -53,6 +59,8 @@ private:
 	cl_command_queue  commandQueue;  /**< CL command queue */
 	cl_program             program;  /**< CL program  */
 	cl_kernel               kernel;  /**< CL kernel */
+	std::string kernelBuildOptions;  /**< CL kernel build options */
+	std::string         kernelInfo;  /**< CL kernel information */
 	size_t        globalThreads[2];  /**< CL total number of work items for a kernel */
 	size_t         localThreads[2];  /**< CL number of work items per group */
 	
@@ -88,12 +96,14 @@ public:
 			switchImages(true),
 			executionTime(0.0f),
 			readSync(CL_TRUE),
-			generationsPerCopyEvent(0)
+			generationsPerCopyEvent(0),
+			kernelBuildOptions(""),
+			kernelInfo("")
 		{
 			imageSize[0] = 0;
 			imageSize[1] = 0;
 			
-			test = true;
+			test = false;
 			testSizeBytes = 20*11*sizeof(float);
 	}
 	
@@ -276,6 +286,14 @@ public:
 	}
 	
 	/**
+	* Get options used for building OpenCL kernel.
+	* @return kernelBuildOptions
+	*/
+	std::string getKernelInfo() {
+		return kernelInfo;
+	}
+	
+	/**
 	* Set the starting population for random mode.
 	* @param _population chance to create a live cell
 	*/	
@@ -307,48 +325,33 @@ public:
 	* Set the rule for calculating next generations.
 	* @param _rule rule as an array of characters
 	*/
-	int setRule(char *_rule) {
-		int counter = 0;
-		unsigned int delimiterPos = 0;
-		for (unsigned int i = 0; i < strlen(_rule); i++) {
-			if (_rule[i] == '/') {
-				counter++;
-				delimiterPos = i;
-			}
+	int setRule(char *_rule);
+	
+	/**
+	* Set the OpenCL kernel work-items per work-group.
+	* @param c switch for clamp mode
+	* @param x work-items per work-group for x
+	* @param y work-items per work-group for y
+	*/
+	int setKernelBuildOptions(int c, std::string x, std::string y) {
+		if (c == 1) {
+			/* Set clamp mode */
+			kernelBuildOptions.append("-D CLAMP ");
+			kernelInfo.append("clamp: on");
+		} else {
+			kernelInfo.append("clamp: off");
 		}
-		if (counter != 1) return -1;	/* Only 1 delimiter allowed */
-		
-		/* Allocate space for rules and set to default value 0 */
-		rulesSizeBytes = 18*sizeof(char);
-		rules = (unsigned char*)malloc(rulesSizeBytes);
-		memset(rules,0,18);
-		
-		/* Split up rule in survival and birth */
-		std::string splitter(_rule);
-		humanRules.push_back('S');
-		char numChar[2];
-		if (delimiterPos > 0) {
-			/* there is a survival definition */
-			for (unsigned int i = 0; i < delimiterPos; i++) {
-				int number = atoi(splitter.substr(i,1).c_str());
-				rules[9+(number==9?0:number)] = 255;
-				snprintf(numChar,2,"%i",number);
-				humanRules.push_back(numChar[0]);
-			}
+		if (atoi(x.c_str()) > 0) {
+			/* work-items per work-group for x */
+			kernelBuildOptions.append("-D TPBX=");
+			kernelBuildOptions.append(x);
+			kernelBuildOptions.append(" ");
 		}
-		humanRules.push_back('/');
-		humanRules.push_back('B');
-		if (delimiterPos < splitter.size()-1) {
-			/* there is a birth definition */
-			for (unsigned int i = delimiterPos+1; i < splitter.size(); i++) {
-				int number = atoi(splitter.substr(i,1).c_str());
-				rules[(number==9?0:number)] = 255;
-				snprintf(numChar,2,"%i",number);
-				humanRules.push_back(numChar[0]);
-			}
+		if (atoi(y.c_str()) > 0) {
+			/* work-items per work-group for y */
+			kernelBuildOptions.append("-D TPBY=");
+			kernelBuildOptions.append(y);
 		}
-		
-		return 0;
 	}
 
 private:

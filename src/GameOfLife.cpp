@@ -1,10 +1,54 @@
 #include "../inc/GameOfLife.hpp"
 using namespace std;
 
+int GameOfLife::setRule(char *_rule) {
+	int counter = 0;
+	unsigned int delimiterPos = 0;
+	for (unsigned int i = 0; i < strlen(_rule); i++) {
+		if (_rule[i] == '/') {
+			counter++;
+			delimiterPos = i;
+		}
+	}
+	if (counter != 1) return -1;	/* Only 1 delimiter allowed */
+	
+	/* Allocate space for rules and set to default value 0 */
+	rulesSizeBytes = 18*sizeof(char);
+	rules = (unsigned char*)malloc(rulesSizeBytes);
+	memset(rules,0,18);
+	
+	/* Split up rule in survival and birth */
+	std::string splitter(_rule);
+	humanRules.push_back('S');
+	char numChar[2];
+	if (delimiterPos > 0) {
+		/* there is a survival definition */
+		for (unsigned int i = 0; i < delimiterPos; i++) {
+			int number = atoi(splitter.substr(i,1).c_str());
+			rules[9+(number==9?0:number)] = 255;
+			snprintf(numChar,2,"%i",number);
+			humanRules.push_back(numChar[0]);
+		}
+	}
+	humanRules.push_back('/');
+	humanRules.push_back('B');
+	if (delimiterPos < splitter.size()-1) {
+		/* there is a birth definition */
+		for (unsigned int i = delimiterPos+1; i < splitter.size(); i++) {
+			int number = atoi(splitter.substr(i,1).c_str());
+			rules[(number==9?0:number)] = 255;
+			snprintf(numChar,2,"%i",number);
+			humanRules.push_back(numChar[0]);
+		}
+	}
+	
+	return 0;
+}
+
 int GameOfLife::setup() {
 	if (setupHost() != 0)
 		return -1;
-
+	
 	if (setupDevice() != 0)
 		return -1;
 	
@@ -50,6 +94,7 @@ int GameOfLife::readPopulation() {
 			default: cerr << "Pattern file parse error\n" << endl; break;
 			case -2: cerr << "Cannot open file\n" << endl; break;
 		}
+		
 		return -1;
 	}
 	
@@ -262,7 +307,8 @@ int GameOfLife::setupDevice(void) {
 	program = clCreateProgramWithSource(context, 1, &source,sourceSize, &status);
 	
 	/* Create a OpenCL program executable for all the devices specified */
-	status = clBuildProgram(program, 1, devices, NULL, NULL, NULL);
+	status = clBuildProgram(program, 1, devices, kernelBuildOptions.c_str(), NULL, NULL);
+	
 	if (status != CL_SUCCESS) {
 		/* if clBuildProgram failed get the build log for the first device */
 		char *buildLog;
@@ -307,13 +353,26 @@ int GameOfLife::setupDevice(void) {
 	
 	localThreads[0] = optWorkGroupSize[0];
 	localThreads[1] = optWorkGroupSize[1];
-	assert(maxWorkGroupSize >= localThreads[0] * localThreads[1]);
+	assert(maxWorkGroupSize >= (localThreads[0] * localThreads[1]));
 	
 	int r1 = imageSize[0] % localThreads[0];
 	int r2 = imageSize[1] % localThreads[1];
 	globalThreads[0] = (r1 == 0) ? imageSize[0] : imageSize[0] + localThreads[0] - r1;
 	globalThreads[1] = (r2 == 0) ? imageSize[1] : imageSize[1] + localThreads[1] - r2;
 	
+	char threads[32];
+	kernelInfo.append(" | blocks: ");
+	snprintf(threads,countDigits(globalThreads[0]/localThreads[0])+1,"%i",globalThreads[0]/localThreads[0]);
+	kernelInfo.append(threads);
+	kernelInfo.append("x");
+	snprintf(threads,countDigits(globalThreads[1]/localThreads[1])+1,"%i",globalThreads[1]/localThreads[1]);
+	kernelInfo.append(threads);
+	kernelInfo.append(" | threads: ");
+	snprintf(threads,countDigits(localThreads[0])+1,"%i",localThreads[0]);
+	kernelInfo.append(threads);
+	kernelInfo.append("x");
+	snprintf(threads,countDigits(localThreads[1])+1,"%i",localThreads[1]);
+	kernelInfo.append(threads);
 	return 0;
 }
 
@@ -566,7 +625,7 @@ int GameOfLife::freeMem() {
 		status = clReleaseMemObject(testBuf);
 		assert(status == CL_SUCCESS);
 	}
-
+	
 	/* Release host resources */
 	if (startingImage)
 		free(startingImage);

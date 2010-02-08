@@ -16,12 +16,9 @@
 #endif
 
 #include "GL/glext.h"
-#include <cstring>
 #include <cstdlib>
 #include <iostream>
-#include <sstream>
-#include <iomanip>
-#include <string>
+#include <cstring>
 #include <unistd.h>		/* for command line parsing */
 
 #include "../inc/GameOfLife.hpp"
@@ -65,8 +62,8 @@ static const char *shaderCode =		/* glShader for displaying floating-point textu
 /* Print command line help */
 void showHelp() {
 	printf( "\n" );
-	printf( "Usage: GameOfLife -f PATH [-l RULE] WIDTH [HEIGHT]\n");
-	printf( "  or:  GameOfLife -r DENSITY [-l RULE] WIDTH [HEIGHT]\n");
+	printf( "Usage: GameOfLife -f PATH [-l RULE] [ADV OPTIONS] WIDTH [HEIGHT]\n");
+	printf( "  or:  GameOfLife -r DENSITY [-l RULE] [ADV OPTIONS] WIDTH [HEIGHT]\n");
 	printf( "\n" );
 	printf( "Mandatory arguments to long options are mandatory for short options too.\n");
 	printf( " -h            Prints this help\n");
@@ -77,17 +74,26 @@ void showHelp() {
 	printf( "               defintion is overwritten when there is a\n");
 	printf( "               rule specified in the file\n");
 	printf( "\n" );
+	printf( "---- Advanced OpenCL Options ----\n" );
+	printf( " -c            Use clamp mode for images\n");
+	printf( "               default: wrap mode\n");
+	printf( " -x NUMBER     threads per block for x\n");
+	printf( "               default: 24\n");
+	printf( " -y NUMBER     threads per block for y\n");
+	printf( "               default: 16\n");
+	printf( "\n" );
 }
 
 /* Read commandline arguments */
 int readArguments(int argc, char **argv) {
 	
 	int optionChar;
-	int fSet=0, rSet=0, lSet=0;
+	int fSet=0, rSet=0, lSet=0, cSet=0;
+	string x(""),y("");
 	extern char *optarg;
 	extern int optind, optopt;
 	
-	while ((optionChar = getopt(argc, argv, ":hf:l:r:")) != -1) {
+	while ((optionChar = getopt(argc, argv, ":hf:l:r:cx:y:")) != -1) {
 		switch (optionChar) {
 		case 'f':			/* Set filename */
 			if (rSet) {
@@ -119,9 +125,18 @@ int readArguments(int argc, char **argv) {
 				lSet = 2;
 			}
 			break;
+		case 'c':			/* Set clamp mode for images */
+			cSet++;
+			break;
+		case 'x':			/* Set work-items per work group for x */
+			x.append(optarg);
+			break;
+		case 'y':			/* Set work-items per work group for y */
+			y.append(optarg);
+			break;
 		case 'h':
 			return -1;
-		case ':':			/* -f -l -r without operand */
+		case ':':			/* -f -l -r -k without operand */
 			fprintf(stderr,"Option -%c requires an operand\n", optopt);
 			return -1;
 		case '?':
@@ -138,6 +153,7 @@ int readArguments(int argc, char **argv) {
 		char defaultRule[] = "23/3";
 		GameOfLife.setRule(defaultRule);
 	}
+	GameOfLife.setKernelBuildOptions(cSet,x,y);
 	
 	/* Get width and height */
 	switch (argc-optind) {
@@ -167,11 +183,13 @@ void showControls() {
 	cout << "---- Game of Life with OpenCL ----" << endl;
 	cout << "---- by Thomas Rumpf          ----" << endl;
 	cout << "----------------------------------" << endl;
-	printf("Preferences:\n");
+	printf("Game preferences:\n");
 	printf("rule: %s | mode: %s | width: %i | height: %i \n",
 			GameOfLife.getRule().c_str(),
 			GameOfLife.isFileMode() ? "file" : "random",
 			GameOfLife.getWidth(), GameOfLife.getHeight());
+	printf("Kernel info: \n");
+	printf("%s\n",GameOfLife.getKernelInfo().c_str());
 	printf("\n");
 	printf("Controls:\n");
 	printf(" key  | state | description\n");
@@ -563,7 +581,7 @@ int main(int argc, char **argv) {
 	if(GameOfLife.setup()!=0) return -1;
 	
 	/* Show controls for Game of Life in console */
-	//showControls();
+	showControls();
 	
 	/* Setup OpenGL */
 	initDisplay(argc, argv);

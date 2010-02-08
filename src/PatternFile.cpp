@@ -6,7 +6,6 @@ int PatternFile::parse() {
 	if ((file = fopen(fileName, "r")) == NULL)
 		return -2;
 	
-	int c;					/* character read from file */
 	bool header = true;  /* header specified */
 	
 	/* Skip leading comment lines */
@@ -14,12 +13,14 @@ int PatternFile::parse() {
 		c = getc(file);
 		switch (c) {
 		case EOF:
+			fclose(file);
 			return -1;
 		case '\n':			/* blank line: ignored */
 			continue;
 		case '#':			/* #: ignore, but look for EOF in comment */
 			while ((c = getc (file)) != '\n') {
 				if (c == EOF)	/* EOF in comment */
+					fclose(file);
 					return -1;
 			}
 			continue;
@@ -31,22 +32,20 @@ int PatternFile::parse() {
 	}
 	
 	/* Skip whitespaces */
-	if (skipWhiteSpace() != 0) return -1;
+	if (skipWhiteSpace() != 0) { fclose(file); return -1; }
 	
 	/* Check for header line and parse it, abort when there is no header */
 	header = parseHeader();
-	if (!header) return -1;
-		
+	if (!header) { fclose(file); return -1; }
+	
 	/* Allocate space for pattern according to specified width and height of pattern */
 	patternSizeBytes = 4*patternSize[0]*patternSize[1]*sizeof(char);
 	pattern = (unsigned char *)malloc(patternSizeBytes);
 	
 	/* Parse pattern */
-	if (parsePattern() != 0) return -1;
-		
-	/* Close pattern file */
-	fclose(file);
+	if (parsePattern() != 0) { fclose(file); return -1; }
 	
+	fclose(file);
 	return 0;
 }
 
@@ -101,7 +100,15 @@ bool PatternFile::parseHeader() {
 	
 	/* Get rule definition */
 	if (skipWhiteSpace() != 0) return false;
-	if (c != ',') return false;
+	/*
+	 * If there is no , then assume there is no rule definition
+	 * Use default Conway rule B3/S23
+	 */
+	if (c != ',') {
+		ungetc(c,file);
+		return true;
+	}
+	
 	if (skipWhiteSpace() != 0) return false;
 	if (c != 'r') return false;
 	if ((c=getc(file)) != 'u') return false;
@@ -111,12 +118,7 @@ bool PatternFile::parseHeader() {
 	if (c != '=') return false;
 	if (skipWhiteSpace() != 0) return false;
 	
-	/*
-	 * If there is no B then assume there is no rule definition
-	 * Use default Conway rule B3/S23
-	 */
-	if (c != 'B') return true;
-	
+	if (c != 'B') return false;
 	/* Get rules for birth of a dead cell */
 	while ((c = getc(file)) != '/') {
 		switch (c) {
@@ -138,7 +140,6 @@ bool PatternFile::parseHeader() {
 	
 	if (skipWhiteSpace() != 0) return -1;
 	if (c != 'S') return true;
-	
 	/* Get rules for survival of a live cell */
 	while ((c = getc(file)) != ' ' && c != '\t' && c != 13 && c != 10) {
 		switch (c) {
