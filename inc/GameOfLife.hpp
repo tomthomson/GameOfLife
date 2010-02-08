@@ -332,7 +332,7 @@ public:
 	* @param x work-items per work-group for x
 	* @param y work-items per work-group for y
 	*/
-	int setKernelBuildOptions(int c, std::string x, std::string y) {
+	void setKernelBuildOptions(int c, std::string x, std::string y) {
 		if (c == 1) {
 			/* Set clamp mode */
 			kernelBuildOptions.append("-D CLAMP ");

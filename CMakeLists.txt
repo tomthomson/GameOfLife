@@ -36,7 +36,7 @@ message("Building for CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
 ###
 # compiler flags
 ###
-#SET(CMAKE_CXX_FLAGS_RELEASE "-DTPBX=30 -DTPBY=30 -O2 -g0")
+SET(CMAKE_CXX_FLAGS "-Wall")
 
 ###
 # include source directories

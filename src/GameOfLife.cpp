@@ -20,7 +20,7 @@ int GameOfLife::setRule(char *_rule) {
 	/* Split up rule in survival and birth */
 	std::string splitter(_rule);
 	humanRules.push_back('S');
-	char numChar[2];
+	char numChar[sizeof(int)];
 	if (delimiterPos > 0) {
 		/* there is a survival definition */
 		for (unsigned int i = 0; i < delimiterPos; i++) {
@@ -361,16 +361,16 @@ int GameOfLife::setupDevice(void) {
 	
 	char threads[32];
 	kernelInfo.append(" | blocks: ");
-	snprintf(threads,countDigits(globalThreads[0]/localThreads[0])+1,"%i",globalThreads[0]/localThreads[0]);
+	snprintf(threads,countDigits(globalThreads[0]/localThreads[0])+1,"%i",(int)globalThreads[0]/(int)localThreads[0]);
 	kernelInfo.append(threads);
 	kernelInfo.append("x");
-	snprintf(threads,countDigits(globalThreads[1]/localThreads[1])+1,"%i",globalThreads[1]/localThreads[1]);
+	snprintf(threads,countDigits(globalThreads[1]/localThreads[1])+1,"%i",(int)globalThreads[1]/(int)localThreads[1]);
 	kernelInfo.append(threads);
 	kernelInfo.append(" | threads: ");
-	snprintf(threads,countDigits(localThreads[0])+1,"%i",localThreads[0]);
+	snprintf(threads,countDigits(localThreads[0])+1,"%i",(int)localThreads[0]);
 	kernelInfo.append(threads);
 	kernelInfo.append("x");
-	snprintf(threads,countDigits(localThreads[1])+1,"%i",localThreads[1]);
+	snprintf(threads,countDigits(localThreads[1])+1,"%i",(int)localThreads[1]);
 	kernelInfo.append(threads);
 	return 0;
 }
