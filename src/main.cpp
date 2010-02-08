@@ -39,6 +39,7 @@ GameOfLife GameOfLife;
 /* Global variables for OpenGL */
 GLuint glPBO, glTex, glShader;
 int GLUTWindowHandle;
+char title[57*sizeof(char)+sizeof(float)+sizeof(int)+sizeof(long)];
 bool mouseLeftDown, mouseRightDown;
 float mouseX, mouseY;
 float cameraDistance;
@@ -241,9 +242,9 @@ void displayFunctions() {
 		 * Map buffer to host memory space
 		 * and return address of buffer in host address space
 		 */
-		GLubyte* bufferImage =
-				(GLubyte *)glMapBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, GL_WRITE_ONLY_ARB);
-
+		glBufferDataARB(GL_PIXEL_UNPACK_BUFFER_ARB, 4*GameOfLife.getWidth()*GameOfLife.getHeight(), 0, GL_STREAM_DRAW_ARB);
+		GLubyte* bufferImage = (GLubyte *)glMapBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, GL_WRITE_ONLY_ARB);
+		
 		if (bufferImage) {
 		  	/* Write image of next generation directly on the mapped buffer */
 			int state = GameOfLife.nextGeneration(bufferImage);
@@ -255,10 +256,10 @@ void displayFunctions() {
 		}
 	} else if (GameOfLife.isPaused() && resetGame) {
 	/*
-	 * Reset game if game is paused and not in edit mode
+	 * Reset game if game is paused
 	 */
-		GLubyte* bufferImage =
-				(GLubyte *)glMapBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, GL_WRITE_ONLY_ARB);
+		glBufferDataARB(GL_PIXEL_UNPACK_BUFFER_ARB, 4*GameOfLife.getWidth()*GameOfLife.getHeight(), 0, GL_STREAM_DRAW_ARB);
+		GLubyte* bufferImage = (GLubyte *)glMapBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, GL_WRITE_ONLY_ARB);
 		
 		if (bufferImage) {
 		  	/* Write image of next generation directly on the mapped buffer */
@@ -344,8 +345,8 @@ void display() {
 	glutReportErrors();
 
 	/* Append execution information to window title */
-	char title[64];
-	sprintf(title, "Game of Life @ %s @ %f ms/gen @ %i gens/copy @ generation %u",
+	snprintf(title, 57*sizeof(char)+sizeof(float)+sizeof(int)+sizeof(long),
+			 		"Game of Life @ %s @ %f ms/gen @ %i gens/copy @ generation %lu",
 					GameOfLife.isCPUMode() ? "CPU" : "OpenCL",
 					GameOfLife.getExecutionTime(),
 					GameOfLife.getGenerationsPerCopyEvent(),

@@ -87,6 +87,12 @@ public:
 	}
 	
 private:
+	/**
+	* Skips comments
+	* @return -1 if EOF found, else 0
+	*/
+	int skipComments();
+	
 	/** 
 	* Skips whitespaces of file
 	* @return -1 if EOF found, else 0

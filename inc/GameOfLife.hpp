@@ -89,13 +89,13 @@ public:
 			startingImage(NULL),
 			imageA(NULL),
 			imageB(NULL),
-			generations(0),
 			CPUMode(false),
 			paused(true),
 			singleGen(false),
 			switchImages(true),
 			executionTime(0.0f),
 			readSync(CL_TRUE),
+			generations(0),
 			generationsPerCopyEvent(0),
 			kernelBuildOptions(""),
 			kernelInfo("")
@@ -190,8 +190,7 @@ public:
 	*/
 	void switchCPUMode() {
 		CPUMode = !CPUMode;
-		if (generations == 0)
-			return;
+		if (generations == 0) return;
 		
 		/* Update first OpenCL/CPU image to last calculated generation */
 		if (CPUMode) {  /* Switch from OpenCL to CPU */
@@ -244,7 +243,7 @@ public:
 	* Get number of calculated generations.
 	* @return generations
 	*/
-	int getGenerations() {
+	unsigned long getGenerations() {
 		return generations;
 	}
 	

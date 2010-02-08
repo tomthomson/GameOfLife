@@ -26,7 +26,7 @@ int GameOfLife::setRule(char *_rule) {
 		for (unsigned int i = 0; i < delimiterPos; i++) {
 			int number = atoi(splitter.substr(i,1).c_str());
 			rules[9+(number==9?0:number)] = 255;
-			snprintf(numChar,2,"%i",number);
+			snprintf(numChar,sizeof(int),"%i",number);
 			humanRules.push_back(numChar[0]);
 		}
 	}
@@ -37,7 +37,7 @@ int GameOfLife::setRule(char *_rule) {
 		for (unsigned int i = delimiterPos+1; i < splitter.size(); i++) {
 			int number = atoi(splitter.substr(i,1).c_str());
 			rules[(number==9?0:number)] = 255;
-			snprintf(numChar,2,"%i",number);
+			snprintf(numChar,sizeof(int),"%i",number);
 			humanRules.push_back(numChar[0]);
 		}
 	}
@@ -337,8 +337,7 @@ int GameOfLife::setupDevice(void) {
 	status |= clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&deviceImageA);
 	status |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&deviceImageB);
 	status |= clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *)&deviceRules);
-	if (test)
-		status |= clSetKernelArg(kernel, 3, sizeof(cl_mem), (void *)&testBuf);
+	if (test) status |= clSetKernelArg(kernel, 3, sizeof(cl_mem), (void *)&testBuf);
 	assert(status == CL_SUCCESS);
 	
 	/* Set optimal values for local and global threads */
@@ -377,10 +376,8 @@ int GameOfLife::setupDevice(void) {
 }
 
 int GameOfLife::nextGeneration(unsigned char *bufferImage) {
-	if (CPUMode)
-		return nextGenerationCPU(bufferImage);
-	else
-		return nextGenerationOpenCL(bufferImage);
+	if (CPUMode) return nextGenerationCPU(bufferImage);
+	else return nextGenerationOpenCL(bufferImage);
 }
 
 int GameOfLife::nextGenerationOpenCL(unsigned char *bufferImage) {
@@ -427,6 +424,7 @@ int GameOfLife::nextGenerationOpenCL(unsigned char *bufferImage) {
 		status |= clSetKernelArg(kernel,
 					1, sizeof(cl_mem),
 					switchImages ? (void *)&deviceImageA : (void *)&deviceImageB );
+		assert(status == CL_SUCCESS);
 		
 		/*
 		 * Update image on host for OpenGL output
@@ -469,8 +467,7 @@ int GameOfLife::nextGenerationOpenCL(unsigned char *bufferImage) {
 	clReleaseEvent(copyEvent);
 	
 	/* Single generation mode */
-	if (singleGen)
-		switchPause();
+	if (singleGen) switchPause();
 
 	return 0;
 }
@@ -541,8 +538,7 @@ int GameOfLife::nextGenerationCPU(unsigned char *bufferImage) {
 	switchImages = !switchImages;
 	
 	/* Single generation mode */
-	if (singleGen)
-		switchPause();
+	if (singleGen) switchPause();
 	
 	return 0;
 }
@@ -550,7 +546,7 @@ int GameOfLife::nextGenerationCPU(unsigned char *bufferImage) {
 int GameOfLife::getNumberOfNeighbours(const int x, const int y, const unsigned char *image) {
 	int counter = 0;
 	int neighbourCoord[2];
-
+	
 	for (int i = -1; i <= 1; i++) {
 		for (int k = -1; k <= 1; k++) {
 			neighbourCoord[0] = x + i;
@@ -565,7 +561,7 @@ int GameOfLife::getNumberOfNeighbours(const int x, const int y, const unsigned c
 			}
 		}
 	}
-
+	
 	return counter;
 }
 

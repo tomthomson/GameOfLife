@@ -6,30 +6,11 @@ int PatternFile::parse() {
 	if ((file = fopen(fileName, "r")) == NULL)
 		return -2;
 	
-	bool header = true;  /* header specified */
+	/* Header specified */
+	bool header = true;
 	
 	/* Skip leading comment lines */
-	for (;;) {
-		c = getc(file);
-		switch (c) {
-		case EOF:
-			fclose(file);
-			return -1;
-		case '\n':			/* blank line: ignored */
-			continue;
-		case '#':			/* #: ignore, but look for EOF in comment */
-			while ((c = getc (file)) != '\n') {
-				if (c == EOF)	/* EOF in comment */
-					fclose(file);
-					return -1;
-			}
-			continue;
-		default:			/* other: legitimate text */
-			ungetc(c, file);
-			break;
-		}
-		break;
-	}
+	if (skipComments() != 0) { fclose(file); return -1;}
 	
 	/* Skip whitespaces */
 	if (skipWhiteSpace() != 0) { fclose(file); return -1; }
@@ -46,6 +27,29 @@ int PatternFile::parse() {
 	if (parsePattern() != 0) { fclose(file); return -1; }
 	
 	fclose(file);
+	return 0;
+}
+
+int PatternFile::skipComments() {
+	for (;;) {
+		c = getc(file);
+		switch (c) {
+		case EOF:
+			return -1;
+		case '\n':				/* blank line: ignored */
+			continue;
+		case '#':				/* #: ignore, but look for EOF in comment */
+			while ((c = getc (file)) != '\n') {
+				if (c == EOF)	/* EOF in comment */
+					return -1;
+			}
+			continue;
+		default:				/* other: legitimate text */
+			ungetc(c, file);
+			break;
+		}
+		break;
+	}
 	return 0;
 }
 
