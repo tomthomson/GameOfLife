@@ -46,6 +46,7 @@ int GameOfLife::setRule(char *_rule) {
 }
 
 int GameOfLife::setup() {
+	
 	if (setupHost() != 0)
 		return -1;
 	
@@ -82,7 +83,7 @@ int GameOfLife::setupHost() {
 	
 	/* Spawn initial population */
 	if (spawnPopulation() != 0) return -1;
-
+	
 	return 0;
 }
 
@@ -236,7 +237,7 @@ int GameOfLife::setupDevice(void) {
 	/**
 	* Create context for OpenCL platform with specified context properties
 	*/
-	context = clCreateContextFromType(cprops, CL_DEVICE_TYPE_GPU, NULL, NULL, &status);
+	context = clCreateContextFromType(NULL, CL_DEVICE_TYPE_GPU, NULL, NULL, &status);
 	assert(status == CL_SUCCESS);
 	
 	/* Get the size of device list data */

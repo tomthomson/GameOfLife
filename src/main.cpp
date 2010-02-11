@@ -640,10 +640,14 @@ int main(int argc, char **argv) {
 	/* Setup host/device memory, starting population and OpenCL */
 	if(GameOfLife.setup()!=0) return -1;
 	
-	/* Calculate one generation for OpenCL profiler without OpenGL output */
-	//GameOfLife.nextGeneration(GameOfLife.getImage());
-	//return 0;
-	
+	/* Calculate generations for OpenCL profiler without OpenGL output */
+	/*
+	do {
+	GameOfLife.nextGeneration(GameOfLife.getImage());
+	cout << GameOfLife.getGenerations() << endl;
+	} while (GameOfLife.getGenerations() < 1000);
+	return 0;
+	*/
 	/* Show controls for Game of Life in console */
 	showControls();
 	
