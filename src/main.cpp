@@ -19,7 +19,14 @@
 #include <cstdlib>
 #include <iostream>
 #include <cstring>
-#include <unistd.h>		/* for command line parsing */
+#include <unistd.h>				/* for command line parsing */
+#include <ctime>				/* for time() */
+#include <cstdlib>				/* for srand() and rand() */
+#ifdef WIN32				// Windows system specific
+	#include <windows.h>		/* for QueryPerformanceCounter */
+#else						// Unix based system specific
+	#include <sys/time.h>		/* for gettimeofday() */
+#endif
 
 #include "../inc/GameOfLife.hpp"
 
@@ -39,7 +46,7 @@ GameOfLife GameOfLife;
 /* Global variables for OpenGL */
 GLuint glPBO, glTex, glShader;
 int GLUTWindowHandle;
-char title[57*sizeof(char)+sizeof(float)+sizeof(int)+sizeof(long)];
+char title[57*(int)sizeof(char)+(int)sizeof(float)+(int)sizeof(int)+(int)sizeof(long)];
 bool mouseLeftDown, mouseRightDown;
 float mouseX, mouseY;
 float cameraDistance;
@@ -48,14 +55,19 @@ float clampZoom = 1.0f;
 float clampMove = 0.0f;
 bool drawGrid = false;
 bool resetGame = false;
+float sleeperBarrier = 0.0f;
+#ifdef WIN32
+	LARGE_INTEGER frequency;	/* ticks per second */
+	LARGE_INTEGER start;
+	LARGE_INTEGER end;
+#else
+	timeval start;
+	timeval end;
+#endif
 GLfloat gridControlPoints[2][2][3] = {
 		{{-1.0, -1.0, 0.0}, {1.0, -1.0, 0.0}},
 		{{-1.0, 1.0, 0.0}, {1.0, 1.0, 0.0}}
 	};
-static const char *shaderCode =		/* glShader for displaying floating-point texture */
-			"!!ARBfp1.0\n"
-			"TEX result.color, fragment.texcoord, texture[0], 2D; \n"
-			"END";
 
 /********************************************
 *            Global functions
@@ -66,7 +78,7 @@ void showHelp() {
 	printf( "Usage: GameOfLife -f PATH [-l RULE] [ADV OPTIONS] WIDTH [HEIGHT]\n");
 	printf( "  or:  GameOfLife -r DENSITY [-l RULE] [ADV OPTIONS] WIDTH [HEIGHT]\n");
 	printf( "\n" );
-	printf( "Mandatory arguments to long options are mandatory for short options too.\n");
+	printf( "---- Options ----\n" );
 	printf( " -h            Prints this help\n");
 	printf( " -f FILE       Path to RLE-file used for starting population\n");
 	printf( " -r DENSITY    Use random starting population with given density\n");
@@ -79,9 +91,9 @@ void showHelp() {
 	printf( " -c            Use clamp mode for images\n");
 	printf( "               default: wrap mode\n");
 	printf( " -x NUMBER     threads per block for x\n");
-	printf( "               default: 24\n");
+	printf( "               default: 32\n");
 	printf( " -y NUMBER     threads per block for y\n");
-	printf( "               default: 16\n");
+	printf( "               default: 12\n");
 	printf( "\n" );
 }
 
@@ -195,8 +207,10 @@ void showControls() {
 	printf("Controls:\n");
 	printf(" key  | state | description\n");
 	printf("------|-------|------------\n");
+	printf(" + -  |  %.1f  | wait time between calcuations in sec\n",
+					sleeperBarrier / 1000.0f);
 	printf("space | %s | start/stop calculation of next generation\n",
-					GameOfLife.isPaused() ? "stop " : "start");
+					GameOfLife.isPaused() ? " stop" : "start");
 	printf("  a   | %s | read image of next generation asynchronously \n",
 					GameOfLife.isReadSync() ? " sync" : "async");
 	printf("  c   | %s | calculate next generation with CPU/OpenCL \n",
@@ -212,16 +226,16 @@ void showControls() {
 
 /* Free host memory */
 void freeMem(void) {
+	if (glTex) {
+		glDeleteTextures(1, &glTex);
+		glTex = 0;
+	}
 	if (glPBO) {
 		glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, glPBO);
 		glDeleteBuffers(1, &glPBO);
 		glPBO = 0;
 	}
 	glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, 0);
-	if (glTex) {
-		glDeleteTextures(1, &glTex);
-		glTex = 0;
-	}
 	if (glShader) {
 		glDeleteProgramsARB(1, &glShader);
 	}
@@ -229,21 +243,58 @@ void freeMem(void) {
 		glutDestroyWindow(GLUTWindowHandle);
 }
 
+/* Get current time in milliseconds */
+inline float getCurrentTime() {
+#ifdef WIN32
+	QueryPerformanceCounter(&end);
+	return ( endCount.QuadPart * (1000.0f / frequency.QuadPart)
+			 - startCount.QuadPart * (1000.0f / frequency.QuadPart)
+			);
+#else
+	gettimeofday(&end, NULL);
+	return ( (float)(end.tv_sec - start.tv_sec) * 1000.0f
+			 + (float)(end.tv_usec - start.tv_usec) / 1000.0f
+			);
+#endif
+}
+
+/* Reset timer */
+inline void resetTime() {
+	#ifdef WIN32
+		QueryPerformanceFrequency(&frequency);
+		QueryPerformanceCounter(&start);
+	#else
+		gettimeofday(&start, NULL);
+	#endif
+}
+
 /********************************************
 *         GLUT callback functions
 *********************************************/
 /* functions which change the board before displaying it */
 void displayFunctions() {
-	if(!GameOfLife.isPaused()) {
+	if(!GameOfLife.isPaused() && getCurrentTime() >= sleeperBarrier) {
+		resetTime();
 	/*
 	 * Calculate next generation if game is not paused
 	 */
 		/*
 		 * Map buffer to host memory space
 		 * and return address of buffer in host address space
+		 *
+         * Note that glMapBufferARB() causes sync issue.
+		 * If GPU is working with this buffer, glMapBufferARB() will wait(stall)
+         * for GPU to finish its job. To avoid waiting (stall), you can call
+         * first glBufferDataARB() with NULL pointer before glMapBufferARB().
+         * If you do that, the previous data in PBO will be discarded and
+         * glMapBufferARB() returns a new allocated pointer immediately
+         * even if GPU is still working with the previous data.
 		 */
-		glBufferDataARB(GL_PIXEL_UNPACK_BUFFER_ARB, 4*GameOfLife.getWidth()*GameOfLife.getHeight(), 0, GL_STREAM_DRAW_ARB);
-		GLubyte* bufferImage = (GLubyte *)glMapBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, GL_WRITE_ONLY_ARB);
+		glBufferDataARB(GL_PIXEL_UNPACK_BUFFER_ARB,
+						4*GameOfLife.getWidth()*GameOfLife.getHeight(),
+						0, GL_STREAM_DRAW_ARB);
+		GLubyte* bufferImage =
+			(GLubyte *)glMapBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, GL_WRITE_ONLY_ARB);
 		
 		if (bufferImage) {
 		  	/* Write image of next generation directly on the mapped buffer */
@@ -254,6 +305,7 @@ void displayFunctions() {
 			
 			if (state != 0) exit(-1);
 		}
+		
 	} else if (GameOfLife.isPaused() && resetGame) {
 	/*
 	 * Reset game if game is paused
@@ -271,6 +323,7 @@ void displayFunctions() {
 			if (state != 0) exit(-1);
 		}
 		
+		
 		resetGame = false;
 		showControls();
 	}
@@ -278,10 +331,25 @@ void displayFunctions() {
 
 /* Display function */
 void display() {
+	/* Bind the texture and PBO */
+	glBindTexture(GL_TEXTURE_2D, glTex);
+	glBindBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, glPBO);
+	
+	/* Copy pixels from PBO to texture object */
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+					GameOfLife.getWidth(), GameOfLife.getHeight(),
+					GL_RGBA, GL_UNSIGNED_BYTE, BUFFER_DATA(0));
+	
 	/*
 	 * Execute functions which change the board
 	 */
 	displayFunctions();
+	
+	/*
+	 * Release PBOs with ID 0 after use
+	 * Once bound with 0, all pixel operations behave normal ways
+	 */
+	glBindBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, 0);
 	
 	/*
 	 * Draw GameOfLife image/board
@@ -289,34 +357,27 @@ void display() {
 	/* Clear buffer */
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	
-	/* Save the initial ModelView matrix before modifying ModelView matrix */
+	/* Save the initial ModelView matrix before modifying it */
     glPushMatrix();
-	glLoadIdentity();								// reset modelview matrix
+	glLoadIdentity();
 	
 	/* Transform camera */
 	glScalef(cameraDistance,cameraDistance,1);		// zoom
 	glTranslatef(verticalMove,horizontalMove,0.0f);	// move
 	
-	/* Download texture from PBO */
-	glBindTexture(GL_TEXTURE_2D, glTex);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, GameOfLife.getWidth(), GameOfLife.getHeight(),
-					GL_RGBA, GL_UNSIGNED_BYTE, BUFFER_DATA(0));
-
-	/* Fragment program is required to display floating point texture */
-	glBindProgramARB(GL_FRAGMENT_PROGRAM_ARB, glShader);
-	glEnable(GL_FRAGMENT_PROGRAM_ARB);
-	glDisable(GL_DEPTH_TEST);
 	
 	/* Draw textured geometry */
+	glColor3f(1.0f, 1.0f, 1.0f);
 	glBegin(GL_QUADS);
-		glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, -1.0f);
-		glTexCoord2f(1.0f, 0.0f); glVertex2f(1.0f, -1.0f);
-		glTexCoord2f(1.0f, 1.0f); glVertex2f(1.0f, 1.0f);
-		glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f, 1.0f);
+		glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, 1.0f);
+		glTexCoord2f(1.0f, 0.0f); glVertex2f(1.0f, 1.0f);
+		glTexCoord2f(1.0f, 1.0f); glVertex2f(1.0f, -1.0f);
+		glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f, -1.0f);
 	glEnd();
 	
+	/* Unbind texture */
 	glBindTexture(GL_TEXTURE_2D, 0);
-	glDisable(GL_FRAGMENT_PROGRAM_ARB);
+
 	
 	/* Draw grid */
 	if (drawGrid) {
@@ -374,6 +435,13 @@ void keyboard(unsigned char key, int mouseX, int mouseY) {
 		/* Pressing s switches single generation mode on/off */
 		case 's': GameOfLife.switchSingleGeneration(); break;
 		/* Pressing escape or q exits */
+		/* Pressing p switches waiting time between calculations on/off */
+		case '+':
+			sleeperBarrier += 100.0f;
+			break;
+		case '-':
+			sleeperBarrier = max(0.0f, sleeperBarrier-100.0f);
+			break;
 		case 27:
 		case 'q':
 		case 'Q':
@@ -493,7 +561,6 @@ void initOpenGL(void) {
 	
 	/* Enable features */
 	glEnable(GL_DEPTH_TEST);			// enables depth testing
-	glEnable(GL_TEXTURE_2D);
 	
 	glClearColor(36./255., 36./255., 85./255., 1.0);	// background color
 	glClearStencil(0);					// clear stencil buffer
@@ -501,27 +568,21 @@ void initOpenGL(void) {
 	glDepthFunc(GL_LEQUAL);				// type of depth test
 }
 
-GLuint compileASMShader(GLenum program_type, const char *code) {
-	GLuint programID;
-	glGenProgramsARB(1, &programID);
-	glBindProgramARB(program_type, programID);
-	glProgramStringARB(program_type, GL_PROGRAM_FORMAT_ASCII_ARB,
-						(GLsizei) strlen(code), (GLubyte *) code);
-	
-	GLint error_pos;
-	glGetIntegerv(GL_PROGRAM_ERROR_POSITION_ARB, &error_pos);
-	if (error_pos != -1) {
-		const GLubyte *error_string;
-		error_string = glGetString(GL_PROGRAM_ERROR_STRING_ARB);
-		cerr << "OpenGL program error at position: " << (int)error_pos << endl;
-		cerr << error_string << endl;
-		return 0;
-	}
-	return programID;
-}
-
 /* Initialise OpenGL Pixel Buffer Objects */
 void initOpenGLBuffers() {
+	
+	/* Delete old texture and PBO */
+	if (glTex) {
+		glDeleteTextures(1, &glTex);
+		glTex = 0;
+	}
+	if (glPBO) {
+		glDeleteBuffers(1, &glPBO);
+		glPBO = 0;
+	}
+
+    /* Create new texture */
+	glEnable(GL_TEXTURE_2D);
 	glGenTextures(1, &glTex);
 	glBindTexture(GL_TEXTURE_2D, glTex);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
@@ -530,17 +591,16 @@ void initOpenGLBuffers() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, GameOfLife.getWidth(), GameOfLife.getHeight(),
 					0, GL_RGBA, GL_UNSIGNED_BYTE, GameOfLife.getImage());
+	glBindTexture(GL_TEXTURE_2D, 0);
 	
-	/* Generate a new buffer object */
+	/* Generate new pixel buffer object */
 	glGenBuffers(1, &glPBO);
 	/* Bind the buffer object */
-	glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, glPBO);
+	glBindBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, glPBO);
 	/* Copy pixel data to the buffer object */
-	glBufferData(GL_PIXEL_UNPACK_BUFFER_ARB, GameOfLife.getWidth() * GameOfLife.getHeight() * 4,
-					GameOfLife.getImage(), GL_STREAM_DRAW_ARB);
-	
-	/* Load shader program */
-	glShader = compileASMShader(GL_FRAGMENT_PROGRAM_ARB, shaderCode);
+	glBufferDataARB(GL_PIXEL_UNPACK_BUFFER_ARB,
+				 GameOfLife.getWidth() * GameOfLife.getHeight() * 4,
+				 GameOfLife.getImage(), GL_STREAM_DRAW_ARB);
 }
 
 /* Initalise display */
@@ -568,7 +628,6 @@ void mainLoopGL(void) {
 }
 
 int main(int argc, char **argv) {
-	
 	/* Register exit function */
 	atexit(freeMem);
 	
@@ -581,18 +640,22 @@ int main(int argc, char **argv) {
 	/* Setup host/device memory, starting population and OpenCL */
 	if(GameOfLife.setup()!=0) return -1;
 	
+	/* Calculate one generation for OpenCL profiler without OpenGL output */
+	//GameOfLife.nextGeneration(GameOfLife.getImage());
+	//return 0;
+	
 	/* Show controls for Game of Life in console */
 	showControls();
 	
 	/* Setup OpenGL */
 	initDisplay(argc, argv);
 	
+	/* Start timer */
+	resetTime();
+	
 	/* Display GameOfLife image/board and calculate next generations */
 	mainLoopGL();
 	
-	/* Calculate one generation for OpenCL profiler without OpenGL output */
-	//GameOfLife.nextGeneration(GameOfLife.getImage());
-	//cout << GameOfLife.getExecutionTime() << endl;
 	
 	return 0;
 }

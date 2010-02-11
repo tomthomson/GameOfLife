@@ -1,8 +1,8 @@
 #ifndef TPBX
-#define TPBX 24		// work items (threads) per work group (block) X
+#define TPBX 32		// work items (threads) per work group (block) X
 #endif
 #ifndef TPBY
-#define TPBY 16		// work items (threads) per work group (block) Y
+#define TPBY 12		// work items (threads) per work group (block) Y
 #endif
 
 /* properties for reading/writing images */
@@ -76,7 +76,6 @@ __attribute__( (reqd_work_group_size(TPBX, TPBY, 1)) )
 		__read_only image2d_t imageA,
 		__write_only image2d_t imageB,
 		__constant uchar *rules
-		//,__global float *test
 		) {
 	
 	/* Get image dimensions */
@@ -103,13 +102,8 @@ __attribute__( (reqd_work_group_size(TPBX, TPBY, 1)) )
 	__private uchar numberOfNeighbours =
 				getNumberOfNeighbours(state, coordNormalized, imageDim, imageA);
 #endif
-	
 	/* Write state of cell in next generation to imageB according to rules */
 	__private uchar i = numberOfNeighbours + 9*(state.x >> 7);
 	setState(coord, (uint4)(rules[i],rules[i],rules[i],1), imageB);
-	
-	/* Write test output */
-	//if (coord.x >= 22 && coord.x < 42 && coord.y >= 30 && coord.y <= 40) {
-		//test[coord.x-22 + (coord.y-30)*20] = (state.x>>7);
 	
 }

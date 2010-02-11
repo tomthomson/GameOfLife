@@ -75,6 +75,7 @@ int PatternFile::getNumber() {
 
 bool PatternFile::parseHeader() {
 	int number = 0;
+	
 	/* Check for header line */
 	if (c != 'x') return false;
 	

@@ -20,7 +20,7 @@ int GameOfLife::setRule(char *_rule) {
 	/* Split up rule in survival and birth */
 	std::string splitter(_rule);
 	humanRules.push_back('S');
-	char numChar[sizeof(int)];
+	char numChar[(int)sizeof(int)];
 	if (delimiterPos > 0) {
 		/* there is a survival definition */
 		for (unsigned int i = 0; i < delimiterPos; i++) {
@@ -285,13 +285,6 @@ int GameOfLife::setupDevice(void) {
 	deviceRules = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
 			rulesSizeBytes, rules, &status);
 	assert(status == CL_SUCCESS);
-	// test
-	if (test) {
-		testVec = (float *)malloc(testSizeBytes);
-		testBuf = clCreateBuffer(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
-			testSizeBytes, testVec, &status);
-		assert(status == CL_SUCCESS);
-	}
 	
 	/**
 	* Load kernel file, build program and create kernel
@@ -337,7 +330,6 @@ int GameOfLife::setupDevice(void) {
 	status |= clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&deviceImageA);
 	status |= clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&deviceImageB);
 	status |= clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *)&deviceRules);
-	if (test) status |= clSetKernelArg(kernel, 3, sizeof(cl_mem), (void *)&testBuf);
 	assert(status == CL_SUCCESS);
 	
 	/* Set optimal values for local and global threads */
@@ -372,6 +364,7 @@ int GameOfLife::setupDevice(void) {
 	kernelInfo.append("x");
 	snprintf(threads,countDigits(localThreads[1])+1,"%i",(int)localThreads[1]);
 	kernelInfo.append(threads);
+	
 	return 0;
 }
 
@@ -396,6 +389,7 @@ int GameOfLife::nextGenerationOpenCL(unsigned char *bufferImage) {
 		status = clEnqueueNDRangeKernel(commandQueue, kernel, 2, NULL,
 			globalThreads, localThreads, NULL, NULL, &kernelEvent);
 		clWaitForEvents(1, &kernelEvent);
+		
 		assert(status == CL_SUCCESS);
 		
 		/* Update generation counter */
@@ -446,22 +440,6 @@ int GameOfLife::nextGenerationOpenCL(unsigned char *bufferImage) {
 			sizeof(cl_int), &copyFinished,
 			NULL);
 		assert(status == CL_SUCCESS);
-		
-		/* Output test vector */
-		if (test) {
-			status = clEnqueueReadBuffer(commandQueue, testBuf, CL_TRUE,
-				0, testSizeBytes, testVec, NULL, NULL, NULL);
-			assert(status == CL_SUCCESS);
-			
-			for (int i = 0; i < 20; i++)
-				cout << (i%10) << "|";
-			for (int i = 0; i < 11*20; i++) {
-				if (i%20==0)
-					cout << endl;
-				cout << (testVec[i]==0?' ':'X') << "|";
-			}
-			cout << endl << endl;
-		}
 	
 	} while (copyFinished != CL_COMPLETE);
 	clReleaseEvent(copyEvent);
@@ -473,58 +451,43 @@ int GameOfLife::nextGenerationOpenCL(unsigned char *bufferImage) {
 }
 
 int GameOfLife::nextGenerationCPU(unsigned char *bufferImage) {
-	int n;
-	unsigned char state;
-	
+	/* Start timer */
 	#ifdef WIN32
 		LARGE_INTEGER frequency;	/* ticks per second */
 		LARGE_INTEGER start;
 		LARGE_INTEGER end;
-	#else
-		timeval start;
-		timeval end;
-	#endif
-	
-	/* Start timer */
-	#ifdef WIN32
+		
 		QueryPerformanceFrequency(&frequency);
 		QueryPerformanceCounter(&start);
 	#else
+		timeval start;
+		timeval end;
+		
 		gettimeofday(&start, NULL);
 	#endif
+	
+	unsigned char state;
+	int numberOfNeighbours, i;
 	
 	/* Calculate next generation for each pixel */
 	for (int x = 0; x < imageSize[0]; x++) {
 		for (int y = 0; y < imageSize[1]; y++) {
-			n = getNumberOfNeighbours(x, y, switchImages?imageA:imageB);
+			numberOfNeighbours =
+				getNumberOfNeighbours(x, y, switchImages?imageA:imageB);
 			state = getState(x, y, switchImages?imageA:imageB);
 			
-			if (state == ALIVE) {
-				if ((n < 2) || (n > 3))
-					setState(x, y, DEAD, switchImages?imageB:imageA);
-				else
-					setState(x, y, ALIVE, switchImages?imageB:imageA);
-			} else {
-				if (n == 3)
-					setState(x, y, ALIVE, switchImages?imageB:imageA);
-				else
-					setState(x, y, DEAD, switchImages?imageB:imageA);
-			}
+			i = numberOfNeighbours + 9*(state >> 7);
+			setState(x, y, rules[i], switchImages?imageB:imageA);
 		}
 	}
 	
-	/* Stop timer */
+	/* Stop timer and calculate execution time for one generation */
 	#ifdef WIN32
 		QueryPerformanceCounter(&end);
+		executionTime = endCount.QuadPart * (1000.0f / frequency.QuadPart)
+						- startCount.QuadPart * (1000.0f / frequency.QuadPart);
 	#else
 		gettimeofday(&end, NULL);
-	#endif
-	
-	/* Calculate execution time for one generation */
-	#ifdef WIN32
-		executionTime = endCount.QuadPart * (1000.0f / frequency.QuadPart)
-						+ startCount.QuadPart * (1000.0f / frequency.QuadPart);
-	#else
 		executionTime = (float)(end.tv_sec - start.tv_sec) * 1000.0f
 						+ (float)(end.tv_usec - start.tv_usec) / 1000.0f;
 	#endif
@@ -617,22 +580,27 @@ int GameOfLife::freeMem() {
 		status = clReleaseContext(context);
 		assert(status == CL_SUCCESS);
 	}
-	if (test) {
-		status = clReleaseMemObject(testBuf);
-		assert(status == CL_SUCCESS);
-	}
 	
 	/* Release host resources */
-	if (startingImage)
+	if (startingImage) {
 		free(startingImage);
-	if (imageA)
+		startingImage = 0;
+	}
+	if (imageA) {
 		free(imageA);
-	if (imageB)
+		imageA = 0;
+	}
+	if (imageB) {
 		free(imageB);
-	if (devices)
+		imageB = 0;
+	}
+	if (devices) {
 		free(devices);
+		devices = 0;
+	}
 	if (rules) {
 		free(rules);
+		rules = 0;
 	}
 	
 	return 0;

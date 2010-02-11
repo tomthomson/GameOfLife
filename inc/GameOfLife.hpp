@@ -47,12 +47,12 @@ private:
 	bool              switchImages;  /**< switch for image exchange */
 
 	unsigned long      generations;  /**< number of calculated generations */
+	int    generationsPerCopyEvent;  /**< number of executed kernels during 1 read image call */
 	bool                   CPUMode;  /**< CPU/OpenCL switch for calculating next generation */
 	bool                    paused;  /**< start/stop calculation of next generation */
 	bool                 singleGen;  /**< switch for single generation mode */
 	float            executionTime;  /**< execution time for calculation of 1 generation */
 	cl_bool               readSync;  /**< switch for synchronous reading of images from device */
-	int    generationsPerCopyEvent;  /**< number of executed kernels during 1 read image call */
 	
 	cl_context             context;  /**< CL context */
 	cl_device_id          *devices;  /**< CL device list */
@@ -70,11 +70,6 @@ private:
 	size_t               origin[3];  /**< CL offset for image operations */
 	size_t               region[3];  /**< CL region for image operations */
 	cl_mem             deviceRules;  /**< cL memory object for rules */
-	
-	float                 *testVec;
-	cl_mem                 testBuf;
-	size_t           testSizeBytes;
-	bool                      test;
 
 public:
 	/** 
@@ -89,22 +84,19 @@ public:
 			startingImage(NULL),
 			imageA(NULL),
 			imageB(NULL),
+			switchImages(true),
+			generations(0),
+			generationsPerCopyEvent(0),
 			CPUMode(false),
 			paused(true),
 			singleGen(false),
-			switchImages(true),
 			executionTime(0.0f),
 			readSync(CL_TRUE),
-			generations(0),
-			generationsPerCopyEvent(0),
 			kernelBuildOptions(""),
 			kernelInfo("")
 		{
 			imageSize[0] = 0;
 			imageSize[1] = 0;
-			
-			test = false;
-			testSizeBytes = 20*11*sizeof(float);
 	}
 	
 	/** 

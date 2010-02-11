@@ -6,8 +6,6 @@ project(GameOfLife)
 ###
 # for finding local cmake scripts
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-# for finding GLEW libs; also add ${GLEW_LIBRARY} to target_link_libraries
-#set(CMAKE_PREFIX_PATH "/home/thomson/apps/NVIDIA_GPU_Computing_SDK/shared/lib/linux")
 
 ###
 # find additional packages and include corresponding directories
@@ -21,9 +19,6 @@ include_directories(${GLUT_INCLUDE_DIR})
 # OpenGL
 find_package(OpenGL REQUIRED)
 include_directories(${OPENGL_INCLUDE_DIR})
-# GLEW
-#find_package(GLEW REQUIRED)
-#include_directories(${GLEW_INCLUDE_DIR})
 
 ###
 # setting default target for building
@@ -36,7 +31,7 @@ message("Building for CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
 ###
 # compiler flags
 ###
-SET(CMAKE_CXX_FLAGS "-Wall")
+SET(CMAKE_CXX_FLAGS "-g -Wall")
 
 ###
 # include source directories
