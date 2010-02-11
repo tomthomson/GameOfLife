@@ -237,7 +237,7 @@ int GameOfLife::setupDevice(void) {
 	/**
 	* Create context for OpenCL platform with specified context properties
 	*/
-	context = clCreateContextFromType(NULL, CL_DEVICE_TYPE_GPU, NULL, NULL, &status);
+	context = clCreateContextFromType(cprops, CL_DEVICE_TYPE_GPU, NULL, NULL, &status);
 	assert(status == CL_SUCCESS);
 	
 	/* Get the size of device list data */
@@ -432,7 +432,6 @@ int GameOfLife::nextGenerationOpenCL(unsigned char *bufferImage) {
 				NULL, NULL, &copyEvent);
 			assert(status == CL_SUCCESS);
 		}
-		
 		switchImages = !switchImages;
 		
 		/* Get status of copy event */
@@ -441,7 +440,7 @@ int GameOfLife::nextGenerationOpenCL(unsigned char *bufferImage) {
 			sizeof(cl_int), &copyFinished,
 			NULL);
 		assert(status == CL_SUCCESS);
-	
+		
 	} while (copyFinished != CL_COMPLETE);
 	clReleaseEvent(copyEvent);
 	

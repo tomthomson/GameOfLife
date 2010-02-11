@@ -110,7 +110,7 @@ int readArguments(int argc, char **argv) {
 		switch (optionChar) {
 		case 'f':			/* Set filename */
 			if (rSet) {
-				fprintf(stderr,"-f and -l are mutually-exclusive\n");
+				fprintf(stderr,"\n-f and -l are mutually-exclusive\n");
 				return -1;
 			} else {
 				GameOfLife.setFilename(optarg);
@@ -119,11 +119,11 @@ int readArguments(int argc, char **argv) {
 			break;
 		case 'r':			/* Set density for random mode */
 			if (fSet) {
-				fprintf(stderr,"-f and -l are mutually-exclusive\n");
+				fprintf(stderr,"\n-f and -l are mutually-exclusive\n");
 				return -1;
 			} else {
 				if (atof(optarg) <= 0.0f) {
-					fprintf(stderr,"Error in density\n");
+					fprintf(stderr,"\nError in density\n");
 					return -1;
 				}
 				GameOfLife.setPopulation(atof(optarg));
@@ -132,7 +132,7 @@ int readArguments(int argc, char **argv) {
 			break;
 		case 'l':			/* Set rule */
 			if (GameOfLife.setRule(optarg) != 0) {
-				fprintf(stderr,"Error in rule definition\n");
+				fprintf(stderr,"\nError in rule definition\n");
 				return -1;
 			} else {
 				lSet = 2;
@@ -150,16 +150,16 @@ int readArguments(int argc, char **argv) {
 		case 'h':
 			return -1;
 		case ':':			/* -f -l -r -k without operand */
-			fprintf(stderr,"Option -%c requires an operand\n", optopt);
+			fprintf(stderr,"\nOption -%c requires an operand\n", optopt);
 			return -1;
 		case '?':
-			fprintf(stderr,"Unrecognized option: -%c\n", optopt);
+			fprintf(stderr,"\nUnrecognized option: -%c\n", optopt);
 			return -1;
 		}
 	}
 	
 	if (fSet == 0 && rSet == 0) {
-		fprintf(stderr,"No spawn mode specified\n");
+		fprintf(stderr,"\nNo spawn mode specified\n");
 		return -1;
 	}
 	if (lSet == 0) {
@@ -177,7 +177,7 @@ int readArguments(int argc, char **argv) {
 		GameOfLife.setSize(atoi(argv[optind]),atoi(argv[optind+1]));
 		break;
 	default:
-		fprintf(stderr,"No width and/or height specified\n");
+		fprintf(stderr,"\nNo width and/or height specified\n");
 		return -1;
 	}
 	
@@ -639,15 +639,18 @@ int main(int argc, char **argv) {
 	
 	/* Setup host/device memory, starting population and OpenCL */
 	if(GameOfLife.setup()!=0) return -1;
-	
+
+#ifdef PROFILING
 	/* Calculate generations for OpenCL profiler without OpenGL output */
 	/*
+	resetTime();
 	do {
-	GameOfLife.nextGeneration(GameOfLife.getImage());
-	cout << GameOfLife.getGenerations() << endl;
-	} while (GameOfLife.getGenerations() < 1000);
+		GameOfLife.nextGeneration(GameOfLife.getImage());
+	} while (GameOfLife.getGenerations() < 10);
+	cout << getCurrentTime() << endl;
 	return 0;
 	*/
+#else
 	/* Show controls for Game of Life in console */
 	showControls();
 	
@@ -659,7 +662,7 @@ int main(int argc, char **argv) {
 	
 	/* Display GameOfLife image/board and calculate next generations */
 	mainLoopGL();
-	
+#endif
 	
 	return 0;
 }
