@@ -1,0 +1,37 @@
+#############################################
+#        John Conway's Game of Life         #
+#        with OpenCL                        #
+#        by Thomas Rumpf                    #
+#############################################
+
+########
+# Build
+########
+
+1. Create MAKEFILE with cmake
+2. Build with make
+
+
+########
+# Usage
+########
+
+Usage: GameOfLife -f PATH [-l RULE] [ADV OPTIONS] WIDTH [HEIGHT]
+  or:  GameOfLife -r DENSITY [-l RULE] [ADV OPTIONS] WIDTH [HEIGHT]
+
+---- Options ----
+ -h            Prints this help
+ -f FILE       Path to RLE-file used for starting population
+ -r DENSITY    Use random starting population with given density
+ -l RULE       rule for next generations as a list of Survival/Birth
+               default: 23/3
+               defintion is overwritten when there is a
+               rule specified in the file
+
+---- Advanced OpenCL Options ----
+ -c            Use clamp mode for images
+               default: wrap mode
+ -x NUMBER     threads per block for x
+               default: 32
+ -y NUMBER     threads per block for y
+               default: 12
